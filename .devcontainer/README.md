@@ -19,16 +19,13 @@ This directory contains the configuration for a complete development environment
 ## 🏗️ Container Architecture
 
 ### Services
-- **app**: Main development container with .NET 9, Node.js 18, and development tools
-- **db**: SQL Server 2022 Developer Edition for database operations
+- **app**: Main development container with .NET 9, Node.js 22, and development tools
+- **redis**: for caching
 
 ### Included Tools
 - **.NET 9 SDK**: For backend development
-- **Node.js 18**: For frontend development
-- **Entity Framework Core Tools**: For database migrations
-- **SQL Server Tools**: For database management
+- **Node.js 22**: For frontend development
 - **Docker CLI**: For container operations
-- **Azure CLI**: For cloud deployments
 - **GitHub CLI**: For repository operations
 - **PowerShell**: For cross-platform scripting
 
@@ -36,7 +33,6 @@ This directory contains the configuration for a complete development environment
 The container automatically installs essential extensions:
 - C# development tools
 - TypeScript/React development tools
-- Database management tools
 - Docker tools
 - Git tools
 - Testing tools
@@ -54,7 +50,7 @@ Main configuration file that defines:
 ### `docker-compose.yml`
 Defines the multi-container setup:
 - Development container with mounted workspace
-- SQL Server database container
+- Redis configuration
 - Network configuration
 - Volume management
 
@@ -63,21 +59,17 @@ Custom container image with:
 - Ubuntu base with development tools
 - .NET 9 SDK installation
 - Node.js 18 installation
-- SQL Server command-line tools
 - Development utilities
 
 ### Setup Scripts
 - **`post-create.sh`**: Runs once when container is created
   - Restores .NET packages
   - Installs npm dependencies
-  - Sets up database
   - Creates configuration files
   - Sets up Git hooks
   - Creates development aliases
 
 - **`post-start.sh`**: Runs every time container starts
-  - Checks SQL Server connectivity
-  - Runs database migrations
   - Displays helpful information
 
 ## 🌐 Port Configuration
@@ -87,7 +79,7 @@ Custom container image with:
 | 3000 | React Frontend | Development server |
 | 7001 | .NET API (HTTPS) | Backend API |
 | 5000 | .NET API (HTTP) | Backend API |
-| 1433 | SQL Server | Database server |
+| 6379 | Redis | Distributed cache provider |
 
 ## 📋 Development Commands
 
@@ -106,42 +98,12 @@ test-api     # Run backend unit tests
 test-frontend # Run frontend unit tests
 ```
 
-### Database Commands
-```bash
-db-update    # Apply database migrations
-db-reset     # Reset database (drop and recreate)
-```
-
 ### Utility Commands
 ```bash
 workspace    # Navigate to workspace root
 ll           # List files with details
+fix-permissions # If there are strange things going on with the bin and obj folders
 ```
-
-## 🗄️ Database Configuration
-
-The container includes SQL Server 2022 Developer Edition with:
-- **Server**: localhost,1433
-- **Username**: sa
-- **Password**: YourStrong@Passw0rd
-- **Database**: MoviePriceDb (created automatically)
-
-### Connection String
-```
-Server=localhost,1433;Database=MoviePriceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
-```
-
-## 🔒 Security Considerations
-
-### Development Only
-- The SQL Server password is hardcoded for development convenience
-- TrustServerCertificate is enabled for local development
-- These settings should NEVER be used in production
-
-### Production Deployment
-- Use Azure Key Vault or similar for secrets management
-- Enable proper SSL certificate validation
-- Use managed database services with proper authentication
 
 ## 🛠️ Customization
 
@@ -175,13 +137,8 @@ Add to the `containerEnv` section in `devcontainer.json`:
 2. Check Docker Desktop has sufficient resources allocated
 3. Try rebuilding the container: `Ctrl+Shift+P` → "Dev Containers: Rebuild Container"
 
-### SQL Server Connection Issues
-1. Wait for the database to fully initialize (can take 30-60 seconds)
-2. Check container logs for SQL Server startup messages
-3. Try restarting the container
-
 ### Port Conflicts
-1. Check if ports 3000, 5000, 7001, or 1433 are in use locally
+1. Check if ports 3000, 5000, 7001, or 6379 are in use locally
 2. Stop conflicting services or modify port configuration
 
 ### Performance Issues
@@ -194,7 +151,6 @@ Add to the `containerEnv` section in `devcontainer.json`:
 - [VS Code Dev Containers Documentation](https://code.visualstudio.com/docs/remote/containers)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [.NET in Docker](https://docs.microsoft.com/en-us/dotnet/core/docker/)
-- [SQL Server in Docker](https://docs.microsoft.com/en-us/sql/linux/sql-server-linux-docker-container-deployment)
 
 ## 🤝 Contributing to Dev Container
 

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MoviePriceComparison.Domain.Entities;
 using MoviePriceComparison.Domain.Services;
+
 
 namespace MoviePriceComparison.Infrastructure.Services
 {
@@ -9,93 +9,93 @@ namespace MoviePriceComparison.Infrastructure.Services
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly ILogger<ExternalMovieApiService> _logger;
-
-        private readonly Dictionary<string, string> _providerUrls = new()
-        {
-            { "Cinemaworld", "https://webjetapitest.azurewebsites.net/api/cinemaworld" },
-            { "Filmworld", "https://webjetapitest.azurewebsites.net/api/filmworld" }
-        };
+        private readonly IApiProviderService _movieProdiverService;
 
         public ExternalMovieApiService(
+            IApiProviderService apiProviderService,
             HttpClient httpClient,
             IConfiguration configuration,
             ILogger<ExternalMovieApiService> logger)
         {
+            _movieProdiverService = apiProviderService ?? throw new ArgumentNullException(nameof(apiProviderService));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<IEnumerable<Movie>> GetMoviesFromProviderAsync(string provider)
+        public async Task<IEnumerable<ExternalMovieSummaryDto>> GetMoviesFromProviderAsync(string providerId)
         {
             try
             {
-                if (!_providerUrls.TryGetValue(provider, out var baseUrl))
+                var provider = await _movieProdiverService.GetApiProviderAsync(providerId);
+                if (provider == null)
                 {
-                    _logger.LogWarning("Unknown provider: {Provider}", provider);
-                    return Enumerable.Empty<Movie>();
+                    _logger.LogWarning("Unknown provider: {ProviderId}", providerId);
+                    return Enumerable.Empty<ExternalMovieSummaryDto>();
                 }
 
-                var token = GetApiToken(provider);
-                if (string.IsNullOrEmpty(token))
+                if (string.IsNullOrEmpty(provider.ApiToken))
                 {
-                    _logger.LogWarning("No API token configured for provider: {Provider}", provider);
-                    return Enumerable.Empty<Movie>();
+                    _logger.LogWarning("No API token configured for provider: {ProviderId}", providerId);
+                    return Enumerable.Empty<ExternalMovieSummaryDto>();
                 }
-
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/movies");
-                request.Headers.Add("x-access-token", token);
+                var renderedUrlFragment = provider.Endpoints.Movies;
+                if (renderedUrlFragment.StartsWith('/')) renderedUrlFragment = renderedUrlFragment.Substring(1);
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{provider.BaseUrl}/{renderedUrlFragment}");
+                request.Headers.Add("x-access-token", provider.ApiToken);
 
                 var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("Failed to get movies from {Provider}. Status: {StatusCode}",
-                        provider, response.StatusCode);
-                    return Enumerable.Empty<Movie>();
+                    _logger.LogWarning("Failed to get movies from {ProviderId}. Status: {StatusCode}",
+                        providerId, response.StatusCode);
+                    return Enumerable.Empty<ExternalMovieSummaryDto>();
                 }
 
                 var content = await response.Content.ReadAsStringAsync();
-                var movieDtos = JsonSerializer.Deserialize<ExternalMovieDto[]>(content, new JsonSerializerOptions
+                var movieDtos = JsonSerializer.Deserialize<ExternalMovieSummaryDto[]>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                return movieDtos?.Select(dto => new Movie(dto.Title, dto.Year, dto.Type)) ?? Enumerable.Empty<Movie>();
+                return movieDtos ?? Enumerable.Empty<ExternalMovieSummaryDto>();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting movies from provider {Provider}", provider);
-                return Enumerable.Empty<Movie>();
+                _logger.LogError(ex, "Error getting movies from provider {ProviderId}", providerId);
+                return Enumerable.Empty<ExternalMovieSummaryDto>();
             }
         }
 
-        public async Task<Movie?> GetMovieDetailsFromProviderAsync(string provider, string movieId)
+        public async Task<ExternalMovieDetailDto?> GetMovieDetailsFromProviderAsync(string providerId, string movieId)
         {
             try
             {
-                if (!_providerUrls.TryGetValue(provider, out var baseUrl))
+                var provider = await _movieProdiverService.GetApiProviderAsync(providerId);
+                if (provider == null)
                 {
-                    _logger.LogWarning("Unknown provider: {Provider}", provider);
+                    _logger.LogWarning("Unknown provider: {ProviderId}", providerId);
                     return null;
                 }
 
-                var token = GetApiToken(provider);
-                if (string.IsNullOrEmpty(token))
+                if (string.IsNullOrEmpty(provider.ApiToken))
                 {
-                    _logger.LogWarning("No API token configured for provider: {Provider}", provider);
+                    _logger.LogWarning("No API token configured for provider: {ProviderId}", providerId);
                     return null;
                 }
 
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/movie/{movieId}");
-                request.Headers.Add("x-access-token", token);
+                var renderedUrlFragment = provider.Endpoints.MovieDetail.Replace("{id}", movieId);
+                if (renderedUrlFragment.StartsWith('/')) renderedUrlFragment = renderedUrlFragment.Substring(1);
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{provider.BaseUrl}/{renderedUrlFragment}");
+                request.Headers.Add("x-access-token", provider.ApiToken);
 
                 var response = await _httpClient.SendAsync(request);
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("Failed to get movie details from {Provider} for movie {MovieId}. Status: {StatusCode}",
-                        provider, movieId, response.StatusCode);
+                    _logger.LogWarning("Failed to get movie details from {ProviderId} for movie {MovieId}. Status: {StatusCode}",
+                        providerId, movieId, response.StatusCode);
                     return null;
                 }
 
@@ -105,109 +105,18 @@ namespace MoviePriceComparison.Infrastructure.Services
                     PropertyNameCaseInsensitive = true
                 });
 
-                if (movieDto == null) return null;
-
-                var movie = new Movie(movieDto.Title, movieDto.Year, movieDto.Type);
-                movie.UpdateDetails(
-                    year: movieDto.Year,
-                    type: movieDto.Type,
-                    rated: movieDto.Rated,
-                    released: movieDto.Released,
-                    runtime: movieDto.Runtime,
-                    genre: movieDto.Genre,
-                    director: movieDto.Director,
-                    writer: movieDto.Writer,
-                    actors: movieDto.Actors,
-                    plot: movieDto.Plot,
-                    language: movieDto.Language,
-                    country: movieDto.Country,
-                    awards: movieDto.Awards,
-                    poster: movieDto.Poster,
-                    metascore: movieDto.Metascore,
-                    rating: movieDto.ImdbRating,
-                    votes: movieDto.ImdbVotes
-                );
-
-                return movie;
+                return movieDto;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting movie details from provider {Provider} for movie {MovieId}", provider, movieId);
+                _logger.LogError(ex, "Error getting movie details from provider {ProviderId} for movie {MovieId}", providerId, movieId);
                 return null;
             }
-        }
-
-        public async Task<decimal?> GetMoviePriceFromProviderAsync(string provider, string movieId)
-        {
-            try
-            {
-                var movie = await GetMovieDetailsFromProviderAsync(provider, movieId);
-                if (movie == null) return null;
-
-                // For this implementation, we'll extract price from the movie details
-                // In a real scenario, this might be a separate API call
-                // For now, we'll simulate prices based on provider and movie characteristics
-                return GenerateSimulatedPrice(provider, movieId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting movie price from provider {Provider} for movie {MovieId}", provider, movieId);
-                return null;
-            }
-        }
-
-        public async Task<bool> IsProviderHealthyAsync(string provider)
-        {
-            try
-            {
-                if (!_providerUrls.TryGetValue(provider, out var baseUrl))
-                {
-                    return false;
-                }
-
-                var token = GetApiToken(provider);
-                if (string.IsNullOrEmpty(token))
-                {
-                    return false;
-                }
-
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/movies");
-                request.Headers.Add("x-access-token", token);
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                var response = await _httpClient.SendAsync(request, cts.Token);
-
-                return response.IsSuccessStatusCode;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Health check failed for provider {Provider}", provider);
-                return false;
-            }
-        }
-
-        private string? GetApiToken(string provider)
-        {
-            return provider switch
-            {
-                "Cinemaworld" => _configuration["ExternalApi:CinemaworldToken"],
-                "Filmworld" => _configuration["ExternalApi:FilmworldToken"],
-                _ => null
-            };
-        }
-
-        private static decimal GenerateSimulatedPrice(string provider, string movieId)
-        {
-            // Simulate price generation based on provider and movie
-            var random = new Random(provider.GetHashCode() + movieId.GetHashCode());
-            var basePrice = provider == "Cinemaworld" ? 15.99m : 14.99m;
-            var variation = (decimal)(random.NextDouble() * 10 - 5); // -5 to +5
-            return Math.Max(9.99m, basePrice + variation);
         }
     }
 
     // DTOs for external API responses
-    public class ExternalMovieDto
+    public class ExternalMovieSummaryDto
     {
         public string ID { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
@@ -234,10 +143,9 @@ namespace MoviePriceComparison.Infrastructure.Services
         public string Awards { get; set; } = string.Empty;
         public string Poster { get; set; } = string.Empty;
         public string Metascore { get; set; } = string.Empty;
-        public string ImdbRating { get; set; } = string.Empty;
-        public string ImdbVotes { get; set; } = string.Empty;
-        public string ImdbID { get; set; } = string.Empty;
+        public string Rating { get; set; } = string.Empty;
+        public string Votes { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public string Response { get; set; } = string.Empty;
+        public string Price { get; set; } = string.Empty;
     }
 }

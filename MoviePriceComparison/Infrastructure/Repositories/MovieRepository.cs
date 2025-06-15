@@ -1,102 +1,118 @@
-using Microsoft.EntityFrameworkCore;
 using MoviePriceComparison.Domain.Entities;
 using MoviePriceComparison.Domain.Repositories;
-using MoviePriceComparison.Infrastructure.Data;
+using Microsoft.Extensions.Caching.Memory;
+using MoviePriceComparison.Domain.Services;
+using System.Diagnostics.Contracts;
+using MoviePriceComparison.Infrastructure.Services;
 
 namespace MoviePriceComparison.Infrastructure.Repositories
 {
     public class MovieRepository : IMovieRepository
     {
-        private readonly MovieDbContext _context;
+        private readonly IMemoryCache _cache;
+        private readonly IExternalMovieApiService _externalMovieApiService;
+        private readonly IApiProviderService _apiProviderService;
+        private readonly ILogger<MovieRepository> _logger;
 
-        public MovieRepository(MovieDbContext context)
+        private const string LIST_CACHE_KEY = "movies_list";
+        private const string DETAIL_CACHE_KEY = "movies_detail";
+
+        public MovieRepository(IMemoryCache cache,
+        IExternalMovieApiService externalMovieApiService,
+        IApiProviderService apiProviderService,
+        ILogger<MovieRepository> logger)
         {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _externalMovieApiService = externalMovieApiService ?? throw new ArgumentNullException(nameof(externalMovieApiService));
+            _apiProviderService = apiProviderService ?? throw new ArgumentNullException(nameof(apiProviderService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<IEnumerable<Movie>> GetAllAsync()
+        public async Task RefreshData()
         {
-            return await _context.Movies
-                .OrderBy(m => m.Title)
-                .ToListAsync();
+            _logger.LogInformation("Refreshing Movies cache");
+            _cache.Remove(LIST_CACHE_KEY);
+            _cache.Remove(DETAIL_CACHE_KEY);
+            await _apiProviderService.RefreshApiProvidersAsync(); // might not be necessary
+            await GetAllAsync();
+
         }
 
-        public async Task<Movie?> GetByIdAsync(int id)
+        public async Task<IEnumerable<MovieSummary>> GetAllAsync()
         {
-            return await _context.Movies
-                .FirstOrDefaultAsync(m => m.Id == id);
-        }
-
-        public async Task<Movie?> GetByIdWithPricesAsync(int id)
-        {
-            return await _context.Movies
-                .Include(m => m.MoviePrices)
-                .FirstOrDefaultAsync(m => m.Id == id);
-        }
-
-        public async Task<IEnumerable<Movie>> GetAllWithPricesAsync()
-        {
-            return await _context.Movies
-                .Include(m => m.MoviePrices)
-                .OrderBy(m => m.Title)
-                .ToListAsync();
-        }
-
-        public async Task<IEnumerable<Movie>> SearchAsync(string query)
-        {
-            if (string.IsNullOrWhiteSpace(query))
-                return await GetAllWithPricesAsync();
-
-            var searchTerm = query.ToLower();
-
-            return await _context.Movies
-                .Include(m => m.MoviePrices)
-                .Where(m =>
-                    m.Title.ToLower().Contains(searchTerm) ||
-                    (m.Genre != null && m.Genre.ToLower().Contains(searchTerm)) ||
-                    (m.Director != null && m.Director.ToLower().Contains(searchTerm)) ||
-                    (m.Actors != null && m.Actors.ToLower().Contains(searchTerm)))
-                .OrderBy(m => m.Title)
-                .ToListAsync();
-        }
-
-        public async Task<Movie> AddAsync(Movie movie)
-        {
-            if (movie == null)
-                throw new ArgumentNullException(nameof(movie));
-
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-            return movie;
-        }
-
-        public async Task UpdateAsync(Movie movie)
-        {
-            if (movie == null)
-                throw new ArgumentNullException(nameof(movie));
-
-            _context.Movies.Update(movie);
-            await _context.SaveChangesAsync();
-        }
-
-        public async Task DeleteAsync(int id)
-        {
-            var movie = await _context.Movies.FindAsync(id);
-            if (movie != null)
+            List<MovieSummary> result = new();
+            var providers = await _apiProviderService.GetApiProvidersAsync();
+            providers.ForEach(async p =>
             {
-                _context.Movies.Remove(movie);
-                await _context.SaveChangesAsync();
-            }
+                if (p.IsEnabled)
+                {
+                    List<ExternalMovieSummaryDto>? movies = (await _externalMovieApiService.GetMoviesFromProviderAsync(p.Id)).ToList();
+                    foreach (var item in movies)
+                    {
+                        ExternalMovieDetailDto? externalSpecifics = await _externalMovieApiService.GetMovieDetailsFromProviderAsync(p.Id, item.ID);
+                        MovieSummary? currentMovie = result.FirstOrDefault(x => x.Title == item.Title);
+                        if (currentMovie == null)
+                        {
+                            // add summary
+                            currentMovie = new MovieSummary { Title = item.Title };
+                            result.Add(currentMovie);
+                        }
+                        currentMovie.Actors = externalSpecifics?.Actors ?? currentMovie.Actors;
+                        currentMovie.Awards = externalSpecifics?.Awards ?? currentMovie.Awards;
+                        currentMovie.Country = externalSpecifics?.Country ?? currentMovie.Country;
+                        currentMovie.Director = externalSpecifics?.Director ?? currentMovie.Director;
+                        currentMovie.Genre = externalSpecifics?.Genre ?? currentMovie.Genre;
+                        currentMovie.Language = externalSpecifics?.Language ?? currentMovie.Language;
+                        currentMovie.Metascore = externalSpecifics?.Metascore ?? currentMovie.Metascore;
+                        currentMovie.Plot = externalSpecifics?.Plot ?? currentMovie.Plot;
+                        currentMovie.Rated = externalSpecifics?.Rated ?? currentMovie.Rated;
+                        currentMovie.Rating = externalSpecifics?.Rating ?? currentMovie.Rating;
+                        currentMovie.Released = externalSpecifics?.Released ?? currentMovie.Released;
+                        currentMovie.Runtime = externalSpecifics?.Runtime ?? currentMovie.Runtime;
+                        currentMovie.Type = externalSpecifics?.Type ?? item.Type ?? currentMovie.Type;
+                        currentMovie.Votes = externalSpecifics?.Votes ?? currentMovie.Votes;
+                        currentMovie.Writer = externalSpecifics?.Writer ?? currentMovie.Writer;
+                        currentMovie.Year = externalSpecifics?.Year ?? item.Year ?? currentMovie.Year;
+                        currentMovie.UpdatedAt = DateTime.UtcNow;
+
+                        if (externalSpecifics != null)
+                        {
+                            var currentSpecifics = currentMovie.ProviderSpecificDetails.FirstOrDefault(x => x.ProviderId == p.Id);
+                            if (currentSpecifics == null)
+                            {
+                                currentSpecifics = new MovieProviderSpecificDetail
+                                {
+                                    ProviderId = p.Id,
+                                    MovieId = item.ID
+                                };
+                            }
+                            currentSpecifics.PosterUrl = externalSpecifics?.Poster ?? currentSpecifics.PosterUrl;
+                            if (externalSpecifics?.Price != null
+                                && decimal.TryParse(externalSpecifics?.Price, out decimal dPrice))
+                            {
+                                currentSpecifics.Price = dPrice;
+                            }
+                            currentSpecifics.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+            });
+            return result;
         }
 
-        public async Task<bool> ExistsAsync(int id)
+        public Task<MovieSummary?> GetByTitleAsync(string title)
         {
-            return await _context.Movies.AnyAsync(m => m.Id == id);
+            throw new NotImplementedException();
         }
 
-        public async Task SaveChangesAsync()
+        public Task ResetSummary()
         {
-            await _context.SaveChangesAsync();
+            throw new NotImplementedException();
+        }
+
+        public Task ResetDetail(string title)
+        {
+            throw new NotImplementedException();
         }
     }
 }

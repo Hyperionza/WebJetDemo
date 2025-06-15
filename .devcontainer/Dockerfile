@@ -12,7 +12,8 @@ RUN wget https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-p
 
 # Install Node.js 22
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest
 
 # Install additional tools
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
@@ -40,18 +41,6 @@ RUN mkdir -p /etc/apt/keyrings \
 # Install Entity Framework Core tools
 RUN dotnet tool install --global dotnet-ef
 
-# Install SQL Server command line tools
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
-    && curl https://packages.microsoft.com/config/ubuntu/24.04/prod.list | tee /etc/apt/sources.list.d/msprod.list \
-    && apt-get update \
-    && ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-
-# Add SQL Server tools to PATH
-ENV PATH="$PATH:/opt/mssql-tools18/bin"
-
-# Set up workspace
-WORKDIR /workspace
-
 # Clean up
 RUN apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
@@ -68,8 +57,22 @@ RUN apt-get update && apt-get install -y sudo \
 RUN echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
+# Set up workspace with proper permissions
+WORKDIR /workspace
+RUN chown -R $USERNAME:$USERNAME /workspace
+
 # Switch to non-root user
 USER $USERNAME
 
 # Add dotnet tools to PATH for the user
 ENV PATH="$PATH:/home/$USERNAME/.dotnet/tools"
+
+# Create a script to fix permissions on startup
+RUN echo '#!/bin/bash\n\
+    # Fix workspace permissions\n\
+    sudo chown -R vscode:vscode /workspace\n\
+    # Clean any existing build artifacts that might have wrong permissions\n\
+    find /workspace -name "bin" -type d -exec sudo rm -rf {} + 2>/dev/null || true\n\
+    find /workspace -name "obj" -type d -exec sudo rm -rf {} + 2>/dev/null || true\n\
+    echo "Workspace permissions fixed"\n\
+    ' > /home/$USERNAME/fix-permissions.sh && chmod +x /home/$USERNAME/fix-permissions.sh

@@ -1,10 +1,15 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using MoviePriceComparison.Models;
+using MoviePriceComparison.Application.DTOs;
+using MoviePriceComparison.Domain.Services;
 using System.Text.Json;
 
-namespace MoviePriceComparison.Services
+namespace MoviePriceComparison.Infrastructure.Services
 {
+    /// <summary>
+    /// This is a mock service that would connect to another 
+    /// microservice which administers 3rd party movie providers APIs
+    /// </summary>
     public class ApiProviderService : IApiProviderService
     {
         private readonly HttpClient _httpClient;
@@ -12,7 +17,6 @@ namespace MoviePriceComparison.Services
         private readonly ILogger<ApiProviderService> _logger;
         private readonly ApiProviderConfiguration _config;
         private const string CACHE_KEY = "api_providers";
-        private const int CACHE_DURATION_MINUTES = 15;
 
         public ApiProviderService(
             HttpClient httpClient,
@@ -40,7 +44,7 @@ namespace MoviePriceComparison.Services
                 var providers = await FetchApiProvidersFromServiceAsync();
 
                 // Cache the providers
-                _cache.Set(CACHE_KEY, providers, TimeSpan.FromMinutes(CACHE_DURATION_MINUTES));
+                _cache.Set(CACHE_KEY, providers, TimeSpan.FromMinutes(_config.CacheDurationMinutes));
 
                 return providers;
             }
@@ -72,44 +76,44 @@ namespace MoviePriceComparison.Services
 
         private async Task<List<ApiProvider>> FetchApiProvidersFromServiceAsync()
         {
-            if (string.IsNullOrEmpty(_config.ConfigurationServiceUrl))
-            {
-                _logger.LogWarning("Configuration service URL not provided, using fallback providers");
-                return GetFallbackProviders();
-            }
+            // maintain the async pattern
+            await Task.CompletedTask;
+            // mock the response
+            return GetFallbackProviders();
 
-            try
-            {
-                var response = await _httpClient.GetAsync(_config.ConfigurationServiceUrl);
-                response.EnsureSuccessStatusCode();
+            // What it might otherwise look like if there was a real microservice to fetch from
+            // try
+            // {
+            //     var response = await _httpClient.GetAsync(_config.ApiProviderServiceUrl);
+            //     response.EnsureSuccessStatusCode();
 
-                var json = await response.Content.ReadAsStringAsync();
-                var apiResponse = JsonSerializer.Deserialize<ApiProvidersResponse>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+            //     var json = await response.Content.ReadAsStringAsync();
+            //     var apiResponse = JsonSerializer.Deserialize<ApiProvidersResponse>(json, new JsonSerializerOptions
+            //     {
+            //         PropertyNameCaseInsensitive = true
+            //     });
 
-                if (apiResponse?.Providers == null || !apiResponse.Providers.Any())
-                {
-                    _logger.LogWarning("No providers returned from configuration service");
-                    return GetFallbackProviders();
-                }
+            //     if (apiResponse?.Providers == null || !apiResponse.Providers.Any())
+            //     {
+            //         _logger.LogWarning("No providers returned from configuration service");
+            //         return GetFallbackProviders();
+            //     }
 
-                _logger.LogInformation("Successfully fetched {Count} API providers from configuration service",
-                    apiResponse.Providers.Count);
+            //     _logger.LogInformation("Successfully fetched {Count} API providers from configuration service",
+            //         apiResponse.Providers.Count);
 
-                return apiResponse.Providers;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "HTTP error while fetching API providers from {Url}", _config.ConfigurationServiceUrl);
-                throw;
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "JSON parsing error while processing API providers response");
-                throw;
-            }
+            //     return apiResponse.Providers;
+            // }
+            // catch (HttpRequestException ex)
+            // {
+            //     _logger.LogError(ex, "HTTP error while fetching API providers from {Url}", _config.ApiProviderServiceUrl);
+            //     throw;
+            // }
+            // catch (JsonException ex)
+            // {
+            //     _logger.LogError(ex, "JSON parsing error while processing API providers response");
+            //     throw;
+            // }
         }
 
         private List<ApiProvider> GetFallbackProviders()
@@ -124,19 +128,14 @@ namespace MoviePriceComparison.Services
                     Name = "cinemaworld",
                     DisplayName = "Cinemaworld",
                     BaseUrl = "https://webjetapitest.azurewebsites.net/api/cinemaworld",
-                    ApiToken = Environment.GetEnvironmentVariable("CINEMAWORLD_API_TOKEN") ?? "",
+                    ApiToken = "sjd1HfkjU83ksdsm3802k",
                     IsEnabled = true,
                     Priority = 1,
                     TimeoutSeconds = 30,
-                    Headers = new Dictionary<string, string>
-                    {
-                        { "x-access-token", Environment.GetEnvironmentVariable("CINEMAWORLD_API_TOKEN") ?? "" }
-                    },
                     Endpoints = new ApiEndpoints
                     {
                         Movies = "/movies",
-                        MovieDetail = "/movie/{id}",
-                        Health = "/health"
+                        MovieDetail = "/movie/{id}"
                     }
                 },
                 new ApiProvider
@@ -145,19 +144,14 @@ namespace MoviePriceComparison.Services
                     Name = "filmworld",
                     DisplayName = "Filmworld",
                     BaseUrl = "https://webjetapitest.azurewebsites.net/api/filmworld",
-                    ApiToken = Environment.GetEnvironmentVariable("FILMWORLD_API_TOKEN") ?? "",
+                    ApiToken = "sjd1HfkjU83ksdsm3802k",
                     IsEnabled = true,
                     Priority = 2,
                     TimeoutSeconds = 30,
-                    Headers = new Dictionary<string, string>
-                    {
-                        { "x-access-token", Environment.GetEnvironmentVariable("FILMWORLD_API_TOKEN") ?? "" }
-                    },
                     Endpoints = new ApiEndpoints
                     {
                         Movies = "/movies",
-                        MovieDetail = "/movie/{id}",
-                        Health = "/health"
+                        MovieDetail = "/movie/{id}"
                     }
                 }
             };
@@ -166,7 +160,7 @@ namespace MoviePriceComparison.Services
 
     public class ApiProviderConfiguration
     {
-        public string ConfigurationServiceUrl { get; set; } = string.Empty;
+        public string ApiProviderServiceUrl { get; set; } = string.Empty;
         public int CacheDurationMinutes { get; set; } = 15;
         public int TimeoutSeconds { get; set; } = 30;
     }

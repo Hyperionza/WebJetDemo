@@ -23,9 +23,6 @@
                 "ms-vscode.vscode-typescript-next",
                 "esbenp.prettier-vscode",
                 "dbaeumer.vscode-eslint",
-                // Database Extensions
-                "ms-mssql.mssql",
-                "ms-mssql.data-workspace-vscode",
                 // Docker Extensions
                 "ms-azuretools.vscode-docker",
                 // Git Extensions
@@ -42,7 +39,6 @@
     },
     // Features to add to the dev container. More info: https://containers.dev/features.
     "features": {
-        "ghcr.io/devcontainers/features/azure-cli:1": {},
         "ghcr.io/devcontainers/features/github-cli:1": {},
         "ghcr.io/devcontainers/features/powershell:1": {}
     },
@@ -51,7 +47,7 @@
         3000, // React frontend
         7001, // .NET API (HTTPS)
         5000, // .NET API (HTTP)
-        1433 // SQL Server
+        6379 // Redis
     ],
     // Configure port attributes
     "portsAttributes": {
@@ -67,8 +63,8 @@
             "label": ".NET API (HTTP)",
             "onAutoForward": "silent"
         },
-        "1433": {
-            "label": "SQL Server",
+        "6379": {
+            "label": "Redis",
             "onAutoForward": "silent"
         }
     },

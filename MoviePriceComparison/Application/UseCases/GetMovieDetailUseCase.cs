@@ -1,5 +1,4 @@
 using MoviePriceComparison.Application.DTOs;
-using MoviePriceComparison.Domain.Repositories;
 
 namespace MoviePriceComparison.Application.UseCases
 {

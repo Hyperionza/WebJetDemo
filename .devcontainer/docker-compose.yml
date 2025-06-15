@@ -8,25 +8,35 @@ services:
     volumes:
       - ..:/workspace:cached
     command: sleep infinity
-    network_mode: service:db
     depends_on:
-      - db
+      - redis
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - DOTNET_USE_POLLING_FILE_WATCHER=true
-      - ConnectionStrings__DefaultConnection=Server=localhost,1433;Database=MoviePriceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;
+      - ConnectionStrings__Redis=redis:6379
+    networks:
+      - app-network
 
-  db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
-    environment:
-      SA_PASSWORD: YourStrong@Passw0rd
-      ACCEPT_EULA: Y
-      MSSQL_PID: Developer
     ports:
-      - "1433:1433"
+      - "6379:6379"
     volumes:
-      - mssql-data:/var/opt/mssql
+      - redis-data:/data
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
-  mssql-data:
+  redis-data:
+
+
+networks:
+  app-network:
+    driver: bridge

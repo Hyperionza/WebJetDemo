@@ -1,6 +1,6 @@
-using MoviePriceComparison.Models;
+using MoviePriceComparison.Application.DTOs;
 
-namespace MoviePriceComparison.Services
+namespace MoviePriceComparison.Domain.Services
 {
     public interface IApiProviderService
     {

@@ -1,12 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using MoviePriceComparison.Infrastructure.Data;
-using MoviePriceComparison.Domain.Repositories;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using MoviePriceComparison.Domain.Services;
-using MoviePriceComparison.Infrastructure.Repositories;
 using MoviePriceComparison.Infrastructure.Services;
 using MoviePriceComparison.Application.UseCases;
-using MoviePriceComparison.Services;
-using MoviePriceComparison.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,44 +16,31 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Configure database
-if (isLocalDev)
-{
-    builder.Services.AddDbContext<MovieDbContext>(options =>
-        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ??
-                         "Data Source=movies.db"));
-}
-else
-{
-    builder.Services.AddDbContext<MovieDbContext>(options =>
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-}
-
 // Configure caching
 builder.Services.AddMemoryCache(); // For API provider caching
 
-if (isLocalDev)
-{
-    builder.Services.AddDistributedMemoryCache();
-}
-else
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrEmpty(redisConnectionString))
 {
     builder.Services.AddStackExchangeRedisCache(options =>
     {
-        options.Configuration = builder.Configuration.GetConnectionString("Redis");
+        options.Configuration = redisConnectionString;
     });
 }
+else
+{
+    // Fallback to in-memory cache if Redis is not available (non-container development)
+    builder.Services.AddDistributedMemoryCache();
+}
 
-// Configure API Provider Service
+// Configure 3rd party movie provider api administration service
 builder.Services.Configure<ApiProviderConfiguration>(options =>
 {
-    // Set the configuration service URL to our own mock endpoint for demo purposes
-    // In production, this would point to an external configuration service
-    options.ConfigurationServiceUrl = isLocalDev
-        ? "http://localhost:5091/api/MockConfiguration/api-providers"
-        : builder.Configuration["ApiProviderService:ConfigurationServiceUrl"] ?? "";
-    options.CacheDurationMinutes = 15;
-    options.TimeoutSeconds = 30;
+    // Set the 3rd party movie provider api administration service URL to our own mock endpoint for demo purposes
+    // In production, this would point to an external microservice
+    options.ApiProviderServiceUrl = builder.Configuration["ApiProviderService:ApiProviderServiceUrl"] ?? "";
+    options.CacheDurationMinutes = builder.Configuration.GetValue<int>("ApiProviderService:ApiProviderServiceUrl", 15);
+    options.TimeoutSeconds = builder.Configuration.GetValue<int>("ApiProviderService:ApiProviderServiceUrl", 30);
 });
 
 // Configure HTTP clients
@@ -77,15 +61,10 @@ builder.Services.AddScoped<IGetMoviesWithPricesUseCase, GetMoviesWithPricesUseCa
 builder.Services.AddScoped<IGetMovieDetailUseCase, GetMovieDetailUseCase>();
 
 // Infrastructure layer
-builder.Services.AddScoped<IMovieRepository, MovieRepository>();
 builder.Services.AddScoped<IExternalMovieApiService, ExternalMovieApiService>();
 
 // Register new dynamic API provider services
 builder.Services.AddScoped<IApiProviderService, ApiProviderService>();
-
-// Legacy services (keeping for backward compatibility)
-builder.Services.AddScoped<IExternalApiService, ExternalApiService>();
-builder.Services.AddScoped<IMovieService, MovieService>();
 
 // Configure CORS for React frontend
 builder.Services.AddCors(options =>
@@ -120,21 +99,6 @@ app.UseHttpsRedirection();
 app.UseCors("AllowReactApp");
 app.UseAuthorization();
 app.MapControllers();
-
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<MovieDbContext>();
-    try
-    {
-        context.Database.EnsureCreated();
-        app.Logger.LogInformation("Database initialized successfully");
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "Error initializing database");
-    }
-}
 
 // Add a simple health check endpoint
 app.MapGet("/health", () => new

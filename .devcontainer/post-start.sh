@@ -1,55 +1,36 @@
 #!/bin/bash
 
-echo "🔄 Starting development services..."
-
-# Check if SQL Server is running and accessible
-echo "🗄️ Checking SQL Server connection..."
-timeout=60
-counter=0
-
-while [ $counter -lt $timeout ]; do
-    if sqlcmd -S localhost,1433 -U sa -P 'YourStrong@Passw0rd' -Q "SELECT 1" > /dev/null 2>&1; then
-        echo "✅ SQL Server is ready"
-        break
-    fi
-    
-    echo "⏳ Waiting for SQL Server... ($counter/$timeout)"
-    sleep 2
-    counter=$((counter + 2))
-done
-
-if [ $counter -ge $timeout ]; then
-    echo "⚠️ SQL Server connection timeout - database operations may fail"
-else
-    # Try to run any pending migrations
-    if [ -d "/workspace/movie-price-api" ]; then
-        echo "🔄 Checking for database migrations..."
-        cd /workspace/movie-price-api
-        dotnet ef database update --verbose 2>/dev/null || echo "⚠️ Migration check failed - may need manual intervention"
-        cd /workspace
-    fi
-fi
-
 # Display helpful information
 echo ""
 echo "🎯 Development Environment Ready!"
 echo ""
-echo "📋 Quick Start Commands:"
-echo "  api          - Start the .NET API server"
-echo "  frontend     - Start the React development server"
-echo "  test-api     - Run backend unit tests"
-echo "  test-frontend - Run frontend unit tests"
+echo "📋 Available commands:"
+echo "  api                    - Start the .NET API"
+echo "  frontend               - Start the React frontend"
+echo "  test-api               - Run backend tests"
+echo "  test-frontend          - Run frontend tests"
+echo "  build-all              - Build both backend and frontend"
+echo "  fix-permissions        - Fix file permissions if needed"
 echo ""
-echo "🔧 Database Commands:"
-echo "  db-update    - Apply database migrations"
-echo "  db-reset     - Reset database (drop and recreate)"
+echo "🔧 Dynamic API Provider commands:"
+echo "  providers              - View current API providers"
+echo "  refresh-providers      - Refresh provider cache"
+echo "  mock-config            - View mock configuration service"
+echo "  disable-provider <id>  - Disable a provider (e.g., disable-provider filmworld)"
+echo "  enable-provider <id>   - Enable a provider (e.g., enable-provider filmworld)"
 echo ""
-echo "🌐 Service URLs:"
-echo "  Frontend:    http://localhost:3000"
-echo "  API:         https://localhost:7001"
-echo "  SQL Server:  localhost:1433"
+echo "🌐 Default URLs:"
+echo "  Frontend: http://localhost:3000"
+echo "  API: http://localhost:5091"
+echo "  Swagger: http://localhost:5091/swagger"
+echo "  Mock Config: http://localhost:5091/api/MockConfiguration/api-providers"
+echo "  Redis: localhost:6379"
 echo ""
-echo "💡 Pro Tips:"
+echo "💡 Tips:"
+echo "  - Run 'source ~/.bashrc' to load the new aliases in your current session"
+echo "  - Use 'providers' to see current API provider configurations"
+echo "  - Use 'disable-provider cinemaworld' to disable a provider for testing"
+echo "  - Check the dynamic API provider documentation in MoviePriceComparison/README-DYNAMIC-API-PROVIDERS.md"
 echo "  - Use 'Ctrl+Shift+\`' to open a new terminal"
 echo "  - Run both 'api' and 'frontend' in separate terminals for full development"
 echo "  - Check the README.md for detailed setup instructions"

@@ -390,8 +390,37 @@ Get detailed movie information
 #### **GET /api/movies/search?query={query}**
 Search movies by title, genre, director, or actors
 
-#### **GET /api/movies/health**
-API health check endpoint
+#### **GET /health**
+System health check endpoint with environment information
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T10:00:00Z",
+  "environment": "LOCALDEV"
+}
+```
+
+#### **GET /api/providers**
+Get current API provider configurations
+```json
+[
+  {
+    "name": "Cinemaworld",
+    "baseUrl": "https://webjetapitest.azurewebsites.net/api/cinemaworld",
+    "isEnabled": true,
+    "lastUpdated": "2024-01-01T10:00:00Z"
+  }
+]
+```
+
+#### **POST /api/providers/refresh**
+Refresh API provider cache
+```json
+{
+  "message": "API providers cache refreshed",
+  "timestamp": "2024-01-01T10:00:00Z"
+}
+```
 
 ## 🔧 Configuration
 
@@ -417,15 +446,41 @@ API health check endpoint
 ```
 
 ### **Development Configuration**
+
+#### With Dev Container (Recommended)
 ```json
 {
   "Environment": "LOCALDEV",
   "ConnectionStrings": {
-    "DefaultConnection": "Data Source=movies.db"
+    "DefaultConnection": "Server=localhost,1433;Database=MoviePriceDb;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;",
+    "Redis": "your-redis-connection-string"
   },
-  "ExternalApi": {
-    "CinemaworldToken": "your-development-token",
-    "FilmworldToken": "your-development-token"
+  "ApiProviderService": {
+    "ConfigurationServiceUrl": "http://localhost:5091/api/MockConfiguration/api-providers"
+  },
+  "ExternalApis": {
+    "ApiToken": "your-development-token",
+    "CinemaworldBaseUrl": "https://webjetapitest.azurewebsites.net/api/cinemaworld",
+    "FilmworldBaseUrl": "https://webjetapitest.azurewebsites.net/api/filmworld"
+  }
+}
+```
+
+#### Without Dev Container
+```json
+{
+  "Environment": "Development",
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=MoviePriceDb;Trusted_Connection=true;MultipleActiveResultSets=true",
+    "Redis": "your-redis-connection-string"
+  },
+  "ApiProviderService": {
+    "ConfigurationServiceUrl": "https://your-config-service.com/api/providers"
+  },
+  "ExternalApis": {
+    "ApiToken": "your-development-token",
+    "CinemaworldBaseUrl": "https://webjetapitest.azurewebsites.net/api/cinemaworld",
+    "FilmworldBaseUrl": "https://webjetapitest.azurewebsites.net/api/filmworld"
   }
 }
 ```
@@ -448,10 +503,10 @@ dotnet run
 ### **Docker**
 ```bash
 # Build image
-docker build -t movie-price-api .
+docker build -t MoviePriceComparison .
 
 # Run container
-docker run -p 5091:8080 movie-price-api
+docker run -p 5091:8080 MoviePriceComparison
 ```
 
 ### **Testing**
@@ -506,7 +561,7 @@ dotnet test --collect:"XPlat Code Coverage"
 - **Loose coupling** between layers
 
 ### **✅ Flexibility**
-- **Database independence** (SQLite ↔ SQL Server)
+- **Database independence** (LocalDB ↔ SQL Server ↔ Azure SQL)
 - **External API independence** (easy to swap providers)
 - **Framework independence** (core logic doesn't depend on ASP.NET)
 

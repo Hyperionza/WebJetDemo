@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MoviePriceComparison.DTOs
+namespace MoviePriceComparison.Application.DTOs
 {
     public class MoviesListResponse
     {

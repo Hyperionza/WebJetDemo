@@ -77,6 +77,7 @@ namespace MoviePriceComparison.Controllers
 
                 // For now, we'll use the get all movies use case and filter
                 // In a real implementation, we'd create a SearchMoviesUseCase
+                // that could start covering fuzzy matching.
                 var allMovies = await _getMoviesWithPricesUseCase.ExecuteAsync();
                 var searchTerm = query.ToLower();
 
@@ -92,29 +93,6 @@ namespace MoviePriceComparison.Controllers
             {
                 _logger.LogError(ex, "Error searching movies with query '{Query}'", query);
                 return StatusCode(500, new { error = "An error occurred while searching movies" });
-            }
-        }
-
-        /// <summary>
-        /// Get health status of the API
-        /// </summary>
-        [HttpGet("health")]
-        public IActionResult GetApiHealth()
-        {
-            try
-            {
-                return Ok(new
-                {
-                    status = "healthy",
-                    timestamp = DateTime.UtcNow,
-                    version = "1.0.0",
-                    architecture = "Clean Architecture"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting API health");
-                return StatusCode(500, new { error = "An error occurred while checking API health" });
             }
         }
     }

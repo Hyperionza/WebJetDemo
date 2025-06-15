@@ -1,12 +1,12 @@
-using MoviePriceComparison.Domain.Entities;
+using MoviePriceComparison.Infrastructure.Services;
 
 namespace MoviePriceComparison.Domain.Services
 {
     public interface IExternalMovieApiService
     {
-        Task<IEnumerable<Movie>> GetMoviesFromProviderAsync(string provider);
-        Task<Movie?> GetMovieDetailsFromProviderAsync(string provider, string movieId);
-        Task<decimal?> GetMoviePriceFromProviderAsync(string provider, string movieId);
-        Task<bool> IsProviderHealthyAsync(string provider);
+        Task<IEnumerable<ExternalMovieSummaryDto>> GetMoviesFromProviderAsync(string provider);
+        Task<ExternalMovieDetailDto?> GetMovieDetailsFromProviderAsync(string provider, string movieId);
+        // would be nice to have something like this
+        // Task<bool> IsProviderHealthyAsync(string provider);
     }
 }
