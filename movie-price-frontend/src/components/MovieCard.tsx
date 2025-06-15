@@ -35,7 +35,7 @@ const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
     return (
       <>
         {imageLoading && (
-          <div className="poster-loading">
+          <div className="poster-loading" data-testid="poster-loading">
             <div className="loading-spinner"></div>
           </div>
         )}
@@ -51,7 +51,12 @@ const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
   };
 
   return (
-    <div className="movie-card" onClick={() => onClick(movie)}>
+    <button
+      className="movie-card"
+      onClick={() => onClick(movie)}
+      aria-label={movie.title}
+      type="button"
+    >
       <div className="movie-poster">
         {renderPosterContent()}
       </div>
@@ -86,7 +91,7 @@ const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 
