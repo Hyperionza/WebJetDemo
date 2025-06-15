@@ -34,7 +34,7 @@ namespace MoviePriceComparison.Services
             {
                 const string cacheKey = "movies_with_prices";
                 var cachedData = await _cache.GetStringAsync(cacheKey);
-                
+
                 if (!string.IsNullOrEmpty(cachedData))
                 {
                     var cached = JsonSerializer.Deserialize<List<MovieComparisonDto>>(cachedData);
@@ -106,7 +106,7 @@ namespace MoviePriceComparison.Services
 
                 var movies = await _context.Movies
                     .Include(m => m.MoviePrices)
-                    .Where(m => m.Title.Contains(query) || 
+                    .Where(m => m.Title.Contains(query) ||
                                (m.Genre != null && m.Genre.Contains(query)) ||
                                (m.Director != null && m.Director.Contains(query)) ||
                                (m.Actors != null && m.Actors.Contains(query)))
@@ -115,7 +115,7 @@ namespace MoviePriceComparison.Services
 
                 var result = movies.Select(MapToMovieComparisonDto).ToList();
                 _logger.LogInformation("Search for '{Query}' returned {Count} movies", query, result.Count);
-                
+
                 return result;
             }
             catch (Exception ex)
@@ -143,7 +143,7 @@ namespace MoviePriceComparison.Services
 
             // Clear cache to force fresh data on next request
             await _cache.RemoveAsync("movies_with_prices");
-            
+
             _logger.LogInformation("Movie data refresh completed");
         }
 
@@ -228,11 +228,11 @@ namespace MoviePriceComparison.Services
 
             // Upsert price information
             var existingPrice = existingMovie.MoviePrices.FirstOrDefault(p => p.Provider == provider);
-            
+
             if (decimal.TryParse(movieDetail.Price, out var price))
             {
                 var freshness = await DetermineFreshness(provider);
-                
+
                 if (existingPrice == null)
                 {
                     existingPrice = new MoviePrice
