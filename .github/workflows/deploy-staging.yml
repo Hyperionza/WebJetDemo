@@ -1,0 +1,92 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ staging ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging Environment
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: ./movie-price-frontend/package-lock.json
+    
+    - name: Build Backend
+      run: |
+        dotnet restore
+        dotnet build --configuration Release
+        dotnet publish --configuration Release --output ./publish
+      working-directory: ./movie-price-api
+    
+    - name: Build Frontend
+      run: |
+        npm ci
+        npm run build
+      working-directory: ./movie-price-frontend
+      env:
+        REACT_APP_API_URL: ${{ vars.STAGING_API_URL }}
+        CI: false
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Deploy Backend to Azure App Service
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ vars.STAGING_BACKEND_APP_NAME }}
+        package: ./movie-price-api/publish
+    
+    - name: Deploy Frontend to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.STAGING_SWA_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: "./movie-price-frontend"
+        output_location: "build"
+        skip_app_build: true
+    
+    - name: Run Smoke Tests
+      run: |
+        echo "Running smoke tests against staging environment..."
+        curl -f ${{ vars.STAGING_API_URL }}/health || exit 1
+        curl -f ${{ vars.STAGING_FRONTEND_URL }} || exit 1
+        echo "Smoke tests passed!"
+    
+    - name: Notify Teams
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        text: |
+          Staging deployment ${{ job.status }}!
+          Environment: staging
+          Commit: ${{ github.sha }}
+          Author: ${{ github.actor }}
