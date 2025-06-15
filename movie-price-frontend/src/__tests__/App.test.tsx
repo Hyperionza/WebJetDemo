@@ -105,6 +105,9 @@ describe('App', () => {
         // Wait for movies to load
         await waitFor(() => {
             expect(screen.getByText('The Matrix')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.getAllByText('Inception')).toHaveLength(2); // Placeholder + title
         });
 
@@ -117,6 +120,9 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Cinemaworld: ✅')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('Filmworld: ❌')).toBeInTheDocument();
         });
     });
@@ -149,6 +155,9 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockMovieApi.searchMovies).toHaveBeenCalledWith('matrix');
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('Found 1 movie')).toBeInTheDocument();
         });
     });
@@ -184,11 +193,10 @@ describe('App', () => {
         });
 
         // Submit search form
-        const searchInput = screen.getByPlaceholderText('Search movies...');
-        const searchForm = searchInput.closest('form');
+        const searchInput = screen.getByPlaceholderText('Search movies...') as HTMLInputElement;
 
         fireEvent.change(searchInput, { target: { value: 'matrix' } });
-        fireEvent.submit(searchForm!);
+        fireEvent.submit(searchInput.form!);
 
         await waitFor(() => {
             expect(mockMovieApi.searchMovies).toHaveBeenCalledWith('matrix');
@@ -212,7 +220,13 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(mockMovieApi.refreshMovieData).toHaveBeenCalledTimes(1);
+        });
+
+        await waitFor(() => {
             expect(mockMovieApi.getMovies).toHaveBeenCalledTimes(2); // Initial + after refresh
+        });
+
+        await waitFor(() => {
             expect(mockMovieApi.getApiHealth).toHaveBeenCalledTimes(2); // Initial + after refresh
         });
 
@@ -251,9 +265,9 @@ describe('App', () => {
             expect(screen.getByText('The Matrix')).toBeInTheDocument();
         });
 
-        // Click on a movie card
-        const movieCard = screen.getByText('The Matrix').closest('.movie-card');
-        fireEvent.click(movieCard!);
+        // Click on a movie card - use getByRole to find the clickable element
+        const movieCard = screen.getByRole('button', { name: /the matrix/i });
+        fireEvent.click(movieCard);
 
         expect(alertSpy).toHaveBeenCalledWith(
             expect.stringContaining('Movie Details:')
@@ -273,6 +287,9 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(screen.getByText(`Error: ${errorMessage}`)).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('Try Again')).toBeInTheDocument();
         });
     });
@@ -296,6 +313,9 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(screen.getByText('The Matrix')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.queryByText('Error: Network error')).not.toBeInTheDocument();
         });
     });
@@ -348,6 +368,9 @@ describe('App', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Found 0 movies')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('No movies found. Try refreshing the data or check your search query.')).toBeInTheDocument();
         });
     });

@@ -89,8 +89,8 @@ describe('MovieCard', () => {
     test('calls onClick when card is clicked', () => {
         render(<MovieCard movie={mockMovie} onClick={mockOnClick} />);
 
-        const card = screen.getByText('The Matrix').closest('.movie-card');
-        fireEvent.click(card!);
+        const card = screen.getByRole('button', { name: /the matrix/i });
+        fireEvent.click(card);
 
         expect(mockOnClick).toHaveBeenCalledWith(mockMovie);
     });
@@ -124,8 +124,8 @@ describe('MovieCard', () => {
     test('shows loading state for image', () => {
         render(<MovieCard movie={mockMovie} onClick={mockOnClick} />);
 
-        // Initially, loading spinner should be present
-        const loadingElement = screen.getByText('The Matrix').closest('.movie-card')?.querySelector('.poster-loading');
+        // Initially, loading spinner should be present - use data-testid or other Testing Library queries
+        const loadingElement = screen.queryByTestId('poster-loading');
         expect(loadingElement).toBeInTheDocument();
     });
 
@@ -136,7 +136,7 @@ describe('MovieCard', () => {
         fireEvent.load(image);
 
         await waitFor(() => {
-            const loadingElement = screen.getByText('The Matrix').closest('.movie-card')?.querySelector('.poster-loading');
+            const loadingElement = screen.queryByTestId('poster-loading');
             expect(loadingElement).not.toBeInTheDocument();
         });
     });
