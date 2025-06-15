@@ -39,7 +39,7 @@ jobs:
         dotnet restore
         dotnet build --configuration Release
         dotnet publish --configuration Release --output ./publish
-      working-directory: ./movie-price-api
+      working-directory: ./MoviePriceComparison
     
     - name: Build Frontend
       run: |
@@ -68,7 +68,7 @@ jobs:
       with:
         app-name: ${{ vars.PRODUCTION_BACKEND_APP_NAME }}
         slot-name: staging-slot
-        package: ./movie-price-api/publish
+        package: ./MoviePriceComparison/publish
     
     - name: Deploy Frontend to Production
       uses: Azure/static-web-apps-deploy@v1

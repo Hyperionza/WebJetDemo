@@ -23,20 +23,20 @@ jobs:
     
     - name: Restore dependencies
       run: dotnet restore
-      working-directory: ./movie-price-api
+      working-directory: ./MoviePriceComparison
     
     - name: Build
       run: dotnet build --no-restore --configuration Release
-      working-directory: ./movie-price-api
+      working-directory: ./MoviePriceComparison
     
     - name: Test
       run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
-      working-directory: ./movie-price-api
+      working-directory: ./MoviePriceComparison.Tests
     
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
       with:
-        directory: ./movie-price-api/TestResults
+        directory: ./MoviePriceComparison.Tests/TestResults
         flags: backend
 
   test-frontend:
@@ -89,7 +89,7 @@ jobs:
     - name: Build Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./movie-price-api
+        context: ./MoviePriceComparison
         push: false
         tags: movie-price-api:${{ github.sha }}
         cache-from: type=gha
