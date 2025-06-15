@@ -23,14 +23,12 @@ jobs:
     
     - name: Restore dependencies
       run: dotnet restore
-      working-directory: ./MoviePriceComparison
     
     - name: Build
       run: dotnet build --no-restore --configuration Release
-      working-directory: ./MoviePriceComparison
     
     - name: Test
-      run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+      run: dotnet test --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
       working-directory: ./MoviePriceComparison.Tests
     
     - name: Upload coverage reports
