@@ -1,0 +1,87 @@
+{
+    "name": "Movie Price Comparison Dev Environment",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspace",
+    "shutdownAction": "stopCompose",
+    // Configure tool-specific properties.
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "dotnet.defaultSolution": "WebJet.sln"
+            },
+            "extensions": [
+                // AI Assistant
+                "saoudrizwan.claude-dev",
+                // .NET Extensions
+                "ms-dotnettools.csharp",
+                "ms-dotnettools.vscode-dotnet-runtime",
+                "ms-dotnettools.blazorwasm-companion",
+                // React/TypeScript Extensions
+                "bradlc.vscode-tailwindcss",
+                "ms-vscode.vscode-typescript-next",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint",
+                // Database Extensions
+                "ms-mssql.mssql",
+                "ms-mssql.data-workspace-vscode",
+                // Docker Extensions
+                "ms-azuretools.vscode-docker",
+                // Git Extensions
+                "eamodio.gitlens",
+                // General Development
+                "ms-vscode.powershell",
+                "redhat.vscode-yaml",
+                "ms-vscode.vscode-json",
+                // Testing
+                "ms-dotnettools.vscodeintellicode-csharp",
+                "formulahendry.dotnet-test-explorer"
+            ]
+        }
+    },
+    // Features to add to the dev container. More info: https://containers.dev/features.
+    "features": {
+        "ghcr.io/devcontainers/features/azure-cli:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/powershell:1": {}
+    },
+    // Use 'forwardPorts' to make a list of ports inside the container available locally.
+    "forwardPorts": [
+        3000, // React frontend
+        7001, // .NET API (HTTPS)
+        5000, // .NET API (HTTP)
+        1433 // SQL Server
+    ],
+    // Configure port attributes
+    "portsAttributes": {
+        "3000": {
+            "label": "React Frontend",
+            "onAutoForward": "notify"
+        },
+        "7001": {
+            "label": ".NET API (HTTPS)",
+            "onAutoForward": "notify"
+        },
+        "5000": {
+            "label": ".NET API (HTTP)",
+            "onAutoForward": "silent"
+        },
+        "1433": {
+            "label": "SQL Server",
+            "onAutoForward": "silent"
+        }
+    },
+    // Use 'postCreateCommand' to run commands after the container is created.
+    "postCreateCommand": "bash .devcontainer/post-create.sh",
+    // Use 'postStartCommand' to run commands after the container starts.
+    "postStartCommand": "bash .devcontainer/post-start.sh",
+    // Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+    "remoteUser": "vscode",
+    // Set environment variables
+    "containerEnv": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_USE_POLLING_FILE_WATCHER": "true",
+        "NUGET_FALLBACK_PACKAGES": "/usr/local/share/dotnet/NuGetFallbackFolder"
+    }
+}
