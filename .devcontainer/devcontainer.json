@@ -81,7 +81,6 @@
     // Set environment variables
     "containerEnv": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_USE_POLLING_FILE_WATCHER": "true",
-        "NUGET_FALLBACK_PACKAGES": "/usr/local/share/dotnet/NuGetFallbackFolder"
+        "DOTNET_USE_POLLING_FILE_WATCHER": "true"
     }
 }

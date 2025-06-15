@@ -13,7 +13,7 @@ fi
 
 # Update npm to latest version
 echo "🔄 Updating npm to latest version..."
-npm install -g npm@latest
+sudo npm install -g npm@latest
 
 # Install frontend dependencies
 echo "📦 Installing frontend dependencies..."
