@@ -1,20 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { MovieComparison, ApiHealth } from './types/Movie';
-import { movieApi } from './services/movieApi';
-import MovieCard from './components/MovieCard';
+import { useEffect, useState } from 'react';
 import './App.css';
+import MovieCard from './components/MovieCard';
+import { movieApi } from './services/movieApi';
+import { MovieComparison } from './types/Movie';
 
 function App() {
   const [movies, setMovies] = useState<MovieComparison[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [apiHealth, setApiHealth] = useState<ApiHealth[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadMovies();
-    loadApiHealth();
   }, []);
 
   const loadMovies = async () => {
@@ -30,40 +27,11 @@ function App() {
     }
   };
 
-  const loadApiHealth = async () => {
-    try {
-      const healthData = await movieApi.getApiHealth();
-      setApiHealth(healthData);
-    } catch (err) {
-      console.error('Failed to load API health:', err);
-    }
-  };
-
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) {
-      loadMovies();
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const searchResults = await movieApi.searchMovies(searchQuery);
-      setMovies(searchResults);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search movies');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
       await movieApi.refreshMovieData();
       await loadMovies();
-      await loadApiHealth();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh data');
     } finally {
@@ -72,39 +40,20 @@ function App() {
   };
 
   const handleMovieClick = (movie: MovieComparison) => {
-    alert(`Movie Details:\n\nTitle: ${movie.title}\nYear: ${movie.year}\nGenre: ${movie.genre}\nDirector: ${movie.director}\nRating: ${movie.rating}\n\nPrices:\n${movie.prices.map(p => `${p.provider}: $${p.price.toFixed(2)} ${p.freshnessIndicator}`).join('\n')}`);
+    const priceText = movie.prices.map(p => `${p.provider}: $${p.price.toFixed(2)}}`).join('\n');
+    const cheapestText = movie.cheapestPrice ? `\nBest Price: ${movie.cheapestPrice.provider} - $${movie.cheapestPrice.price.toFixed(2)}` : '';
+    alert(`Movie Details:\n\nTitle: ${movie.title}\nYear: ${movie.year || 'N/A'}\nGenre: ${movie.genre || 'N/A'}\nDirector: ${movie.director || 'N/A'}\nRating: ${movie.rating || 'N/A'}\n\nPrices:\n${priceText}${cheapestText}`);
   };
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>🎬 Movie Price Comparison</h1>
-        <p>Compare movie prices from Cinemaworld and Filmworld</p>
-        
-        {/* API Health Status */}
-        <div className="api-health">
-          {apiHealth.map((health, index) => (
-            <div key={index} className={`health-indicator ${health.isHealthy ? 'healthy' : 'unhealthy'}`}>
-              {health.provider}: {health.isHealthy ? '✅' : '❌'}
-            </div>
-          ))}
-        </div>
 
         {/* Search and Refresh */}
         <div className="controls">
-          <form onSubmit={handleSearch} className="search-form">
-            <input
-              type="text"
-              placeholder="Search movies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
-            />
-            <button type="submit" className="search-button">Search</button>
-          </form>
-          
-          <button 
-            onClick={handleRefresh} 
+          <button
+            onClick={handleRefresh}
             disabled={refreshing}
             className="refresh-button"
           >
@@ -115,7 +64,7 @@ function App() {
 
       <main className="App-main">
         {loading && <div className="loading">Loading movies...</div>}
-        
+
         {error && (
           <div className="error">
             <p>Error: {error}</p>
@@ -128,7 +77,7 @@ function App() {
             <div className="movies-count">
               Found {movies.length} movie{movies.length !== 1 ? 's' : ''}
             </div>
-            
+
             <div className="movies-grid">
               {movies.map((movie) => (
                 <MovieCard
@@ -147,10 +96,6 @@ function App() {
           </>
         )}
       </main>
-
-      <footer className="App-footer">
-        <p>Data freshness indicators: 🟢 Fresh | 🟡 Cached | 🔴 Stale</p>
-      </footer>
     </div>
   );
 }

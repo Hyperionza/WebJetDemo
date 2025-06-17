@@ -21,7 +21,26 @@ dotnet build --no-restore
 # Install frontend dependencies
 echo "📦 Installing frontend dependencies..."
 cd /workspace/movie-price-frontend
+
+# Clean any existing problematic installations
+rm -rf node_modules package-lock.json 2>/dev/null || true
+
+# Clear npm cache to avoid corruption issues
+npm cache clean --force 2>/dev/null || true
+
+# Simple install - let Create React App handle its own dependencies
 npm install
+
+# Add the one missing dependency that Create React App needs
+npm install ajv@8.17.1
+
+# Verify react-scripts is properly installed
+if [ ! -f "node_modules/react-scripts/bin/react-scripts.js" ]; then
+    echo "⚠️ react-scripts missing, something went wrong with the install"
+    exit 1
+fi
+
+echo "✅ Frontend dependencies installed successfully (simple approach)"
 
 # Create development configuration files if they don't exist
 echo "⚙️ Setting up development configuration..."
@@ -125,4 +144,5 @@ alias enable-provider='function _enable() { curl -X PATCH -H "Content-Type: appl
 alias ll='ls -la'
 alias workspace='cd /workspace'
 alias fix-permissions='sudo chown -R vscode:vscode /workspace && find /workspace -name "bin" -type d -exec sudo rm -rf {} + 2>/dev/null || true && find /workspace -name "obj" -type d -exec sudo rm -rf {} + 2>/dev/null || true'
+alias fix-frontend='cd /workspace && chmod +x fix-frontend-tests.sh && ./fix-frontend-tests.sh'
 EOF

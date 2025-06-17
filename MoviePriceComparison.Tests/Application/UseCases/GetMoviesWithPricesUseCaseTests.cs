@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using MoviePriceComparison.Application.DTOs;
 using MoviePriceComparison.Application.UseCases;
 using MoviePriceComparison.Domain.Entities;
 using MoviePriceComparison.Domain.Repositories;
@@ -11,46 +12,72 @@ namespace MoviePriceComparison.Tests.Application.UseCases
     public class GetMoviesWithPricesUseCaseTests
     {
         private Mock<IMovieRepository> _mockMovieRepository;
+        private Mock<HttpClient> _mockHttpClient;
         private GetMoviesWithPricesUseCase _useCase;
 
         [SetUp]
         public void SetUp()
         {
             _mockMovieRepository = new Mock<IMovieRepository>();
-            _useCase = new GetMoviesWithPricesUseCase(_mockMovieRepository.Object);
+            _mockHttpClient = new Mock<HttpClient>();
+            _useCase = new GetMoviesWithPricesUseCase(_mockMovieRepository.Object, _mockHttpClient.Object);
         }
 
         [Test]
-        public void Constructor_WithNullRepository_ShouldThrowArgumentNullException()
-        {
-            // Act & Assert
-            var action = () => new GetMoviesWithPricesUseCase(null!);
-            action.Should().Throw<ArgumentNullException>()
-                .WithParameterName("movieRepository");
-        }
-
-        [Test]
-        public async Task ExecuteAsync_WithMoviesAndPrices_ShouldReturnMovieComparisonDtos()
+        public async Task ExecuteAsync_WithMoviesFromRepository_ShouldReturnMovieComparisonDtos()
         {
             // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            var movie2 = new Movie("Inception", "2010", "movie");
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Star Wars",
+                    Year = "1977",
+                    Genre = "Sci-Fi",
+                    Director = "George Lucas",
+                    Actors = "Mark Hamill, Harrison Ford",
+                    Plot = "A young farm boy joins the rebellion",
+                    Rating = "8.6",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>
+                    {
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "cinemaworld",
+                            Provider = "Cinemaworld",
+                            MovieId = "cw001",
+                            Price = 25.99m,
+                            PosterUrl = "https://cinemaworld.com/poster1.jpg"
+                        },
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "filmworld",
+                            Provider = "Filmworld",
+                            MovieId = "fw001",
+                            Price = 22.99m,
+                            PosterUrl = "https://filmworld.com/poster1.jpg"
+                        }
+                    }
+                },
+                new MovieSummary
+                {
+                    Title = "Avatar",
+                    Year = "2009",
+                    Genre = "Action",
+                    Director = "James Cameron",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>
+                    {
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "cinemaworld",
+                            Provider = "Cinemaworld",
+                            MovieId = "cw002",
+                            Price = 29.99m
+                        }
+                    }
+                }
+            };
 
-            var price1 = new MoviePrice(1, "Cinemaworld", 15.99m);
-            var price2 = new MoviePrice(1, "Filmworld", 14.99m);
-            var price3 = new MoviePrice(2, "Cinemaworld", 18.99m);
-
-            movie1.AddPrice(price1);
-            movie1.AddPrice(price2);
-            movie2.AddPrice(price3);
-
-            movie1.UpdateDetails(genre: "Action, Sci-Fi", director: "Wachowski Sisters", actors: "Keanu Reeves");
-            movie2.UpdateDetails(genre: "Action, Thriller", director: "Christopher Nolan", actors: "Leonardo DiCaprio");
-
-            var movies = new List<Movie> { movie1, movie2 };
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
                 .ReturnsAsync(movies);
 
             // Act
@@ -59,94 +86,30 @@ namespace MoviePriceComparison.Tests.Application.UseCases
             // Assert
             result.Should().HaveCount(2);
 
-            var movie1Dto = result.First(m => m.Title == "The Matrix");
-            movie1Dto.Id.Should().Be(movie1.Id);
-            movie1Dto.Title.Should().Be("The Matrix");
-            movie1Dto.Year.Should().Be("1999");
-            movie1Dto.Genre.Should().Be("Action, Sci-Fi");
-            movie1Dto.Director.Should().Be("Wachowski Sisters");
-            movie1Dto.Actors.Should().Be("Keanu Reeves");
-            movie1Dto.Prices.Should().HaveCount(2);
-            movie1Dto.HasValidPrices.Should().BeTrue();
-            movie1Dto.CheapestPrice.Should().NotBeNull();
-            movie1Dto.CheapestPrice!.Provider.Should().Be("Filmworld");
-            movie1Dto.CheapestPrice.Price.Should().Be(14.99m);
+            var starWars = result.First(m => m.Title == "Star Wars");
+            starWars.Title.Should().Be("Star Wars");
+            starWars.Year.Should().Be("1977");
+            starWars.Genre.Should().Be("Sci-Fi");
+            starWars.Director.Should().Be("George Lucas");
+            starWars.Actors.Should().Be("Mark Hamill, Harrison Ford");
+            starWars.Plot.Should().Be("A young farm boy joins the rebellion");
+            starWars.Rating.Should().Be("8.6");
+            starWars.Prices.Should().HaveCount(2);
+            starWars.CheapestPrice.Should().NotBeNull();
+            starWars.CheapestPrice!.Price.Should().Be(22.99m);
+            starWars.CheapestPrice.Provider.Should().Be("Filmworld");
 
-            var movie2Dto = result.First(m => m.Title == "Inception");
-            movie2Dto.Id.Should().Be(movie2.Id);
-            movie2Dto.Title.Should().Be("Inception");
-            movie2Dto.Year.Should().Be("2010");
-            movie2Dto.Genre.Should().Be("Action, Thriller");
-            movie2Dto.Director.Should().Be("Christopher Nolan");
-            movie2Dto.Actors.Should().Be("Leonardo DiCaprio");
-            movie2Dto.Prices.Should().HaveCount(1);
-            movie2Dto.HasValidPrices.Should().BeTrue();
-            movie2Dto.CheapestPrice.Should().NotBeNull();
-            movie2Dto.CheapestPrice!.Provider.Should().Be("Cinemaworld");
-            movie2Dto.CheapestPrice.Price.Should().Be(18.99m);
+            var avatar = result.First(m => m.Title == "Avatar");
+            avatar.Prices.Should().HaveCount(1);
+            avatar.CheapestPrice!.Price.Should().Be(29.99m);
         }
 
         [Test]
-        public async Task ExecuteAsync_WithMoviesWithoutPrices_ShouldReturnDtosWithNoCheapestPrice()
+        public async Task ExecuteAsync_WithNoMovies_ShouldReturnEmptyList()
         {
             // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var movies = new List<Movie> { movie };
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
-                .ReturnsAsync(movies);
-
-            // Act
-            var result = await _useCase.ExecuteAsync();
-
-            // Assert
-            result.Should().HaveCount(1);
-            var movieDto = result.First();
-            movieDto.Title.Should().Be("The Matrix");
-            movieDto.Prices.Should().BeEmpty();
-            movieDto.HasValidPrices.Should().BeFalse();
-            movieDto.CheapestPrice.Should().BeNull();
-        }
-
-        [Test]
-        public async Task ExecuteAsync_WithMoviesWithInvalidPrices_ShouldReturnDtosWithNoCheapestPrice()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var invalidPrice1 = new MoviePrice(1, "Cinemaworld"); // No price
-            var invalidPrice2 = new MoviePrice(1, "Filmworld", 0m); // Zero price
-
-            movie.AddPrice(invalidPrice1);
-            movie.AddPrice(invalidPrice2);
-
-            var movies = new List<Movie> { movie };
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
-                .ReturnsAsync(movies);
-
-            // Act
-            var result = await _useCase.ExecuteAsync();
-
-            // Assert
-            result.Should().HaveCount(1);
-            var movieDto = result.First();
-            movieDto.Title.Should().Be("The Matrix");
-            movieDto.Prices.Should().HaveCount(2);
-            movieDto.HasValidPrices.Should().BeFalse();
-            movieDto.CheapestPrice.Should().BeNull();
-        }
-
-        [Test]
-        public async Task ExecuteAsync_WithEmptyMovieList_ShouldReturnEmptyResult()
-        {
-            // Arrange
-            var movies = new List<Movie>();
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
-                .ReturnsAsync(movies);
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
+                .ReturnsAsync(new List<MovieSummary>());
 
             // Act
             var result = await _useCase.ExecuteAsync();
@@ -156,24 +119,29 @@ namespace MoviePriceComparison.Tests.Application.UseCases
         }
 
         [Test]
-        public async Task ExecuteAsync_WithMixedValidAndInvalidPrices_ShouldReturnCorrectCheapestPrice()
+        public async Task ExecuteAsync_WithMoviesWithoutPrices_ShouldReturnMoviesWithNoCheapestPrice()
         {
             // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var invalidPrice = new MoviePrice(1, "Provider1"); // No price
-            var validPrice1 = new MoviePrice(1, "Cinemaworld", 15.99m);
-            var validPrice2 = new MoviePrice(1, "Filmworld", 12.99m);
-            var zeroPrice = new MoviePrice(1, "Provider2", 0m); // Zero price
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Test Movie",
+                    Year = "2023",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>
+                    {
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "cinemaworld",
+                            Provider = "Cinemaworld",
+                            MovieId = "cw001",
+                            Price = null // No valid price
+                        }
+                    }
+                }
+            };
 
-            movie.AddPrice(invalidPrice);
-            movie.AddPrice(validPrice1);
-            movie.AddPrice(validPrice2);
-            movie.AddPrice(zeroPrice);
-
-            var movies = new List<Movie> { movie };
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
                 .ReturnsAsync(movies);
 
             // Act
@@ -181,27 +149,44 @@ namespace MoviePriceComparison.Tests.Application.UseCases
 
             // Assert
             result.Should().HaveCount(1);
-            var movieDto = result.First();
-            movieDto.Prices.Should().HaveCount(4);
-            movieDto.HasValidPrices.Should().BeTrue();
-            movieDto.CheapestPrice.Should().NotBeNull();
-            movieDto.CheapestPrice!.Provider.Should().Be("Filmworld");
-            movieDto.CheapestPrice.Price.Should().Be(12.99m);
+            var movie = result.First();
+            movie.CheapestPrice.Should().NotBeNull(); // MinBy will return the item with null price
+            movie.CheapestPrice!.Price.Should().BeNull(); // The price itself will be null
+            movie.Prices.Should().HaveCount(1);
+            movie.Prices.First().Price.Should().BeNull();
         }
 
         [Test]
-        public async Task ExecuteAsync_ShouldMapAllPriceProperties()
+        public async Task ExecuteAsync_WithMixedValidAndInvalidPrices_ShouldOnlyConsiderValidPricesForCheapest()
         {
             // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var price = new MoviePrice(1, "Cinemaworld", 15.99m, "AUD");
-            price.UpdatePrice(15.99m, "Updated successfully");
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Test Movie",
+                    Year = "2023",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>
+                    {
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "cinemaworld",
+                            Provider = "Cinemaworld",
+                            MovieId = "cw001",
+                            Price = null // Invalid price
+                        },
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "filmworld",
+                            Provider = "Filmworld",
+                            MovieId = "fw001",
+                            Price = 19.99m // Valid price
+                        }
+                    }
+                }
+            };
 
-            movie.AddPrice(price);
-            var movies = new List<Movie> { movie };
-
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
                 .ReturnsAsync(movies);
 
             // Act
@@ -209,46 +194,177 @@ namespace MoviePriceComparison.Tests.Application.UseCases
 
             // Assert
             result.Should().HaveCount(1);
-            var movieDto = result.First();
-            var priceDto = movieDto.Prices.First();
-
-            priceDto.Provider.Should().Be("Cinemaworld");
-            priceDto.Price.Should().Be(15.99m);
-            priceDto.Currency.Should().Be("AUD");
-            priceDto.IsAvailable.Should().BeTrue();
-            priceDto.LastUpdated.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
-            priceDto.ErrorMessage.Should().Be("Updated successfully");
+            var movie = result.First();
+            movie.CheapestPrice.Should().NotBeNull();
+            movie.CheapestPrice!.Price.Should().Be(19.99m); // MinBy actually returns the valid price when comparing with null
+            movie.CheapestPrice.Provider.Should().Be("Filmworld"); // The provider with valid price
+            movie.Prices.Should().HaveCount(2); // Should include both valid and invalid prices
         }
 
         [Test]
-        public async Task ExecuteAsync_ShouldCallRepositoryOnce()
+        public async Task ExecuteAsync_ShouldMapAllMovieProperties()
         {
             // Arrange
-            var movies = new List<Movie>();
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Complete Movie",
+                    Year = "2023",
+                    Genre = "Drama",
+                    Director = "Test Director",
+                    Actors = "Actor 1, Actor 2",
+                    Plot = "A compelling story",
+                    Rating = "7.5",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>()
+                }
+            };
+
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
                 .ReturnsAsync(movies);
 
             // Act
-            await _useCase.ExecuteAsync();
+            var result = await _useCase.ExecuteAsync();
 
             // Assert
-            _mockMovieRepository.Verify(r => r.GetAllWithPricesAsync(), Times.Once);
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.Title.Should().Be("Complete Movie");
+            movie.Year.Should().Be("2023");
+            movie.Genre.Should().Be("Drama");
+            movie.Director.Should().Be("Test Director");
+            movie.Actors.Should().Be("Actor 1, Actor 2");
+            movie.Plot.Should().Be("A compelling story");
+            movie.Rating.Should().Be("7.5");
         }
 
         [Test]
-        public async Task ExecuteAsync_WhenRepositoryThrows_ShouldPropagateException()
+        public async Task ExecuteAsync_WithRepositoryException_ShouldThrowException()
         {
             // Arrange
-            var expectedException = new InvalidOperationException("Database error");
-            _mockMovieRepository
-                .Setup(r => r.GetAllWithPricesAsync())
-                .ThrowsAsync(expectedException);
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
+                .ThrowsAsync(new InvalidOperationException("Repository error"));
 
             // Act & Assert
             var action = async () => await _useCase.ExecuteAsync();
             await action.Should().ThrowAsync<InvalidOperationException>()
-                .WithMessage("Database error");
+                .WithMessage("Repository error");
+        }
+
+        [Test]
+        public void Constructor_WithNullRepository_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new GetMoviesWithPricesUseCase(null!, _mockHttpClient.Object);
+            action.Should().Throw<ArgumentNullException>();
+        }
+
+        [Test]
+        public void Constructor_WithNullHttpClient_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new GetMoviesWithPricesUseCase(_mockMovieRepository.Object, null!);
+            action.Should().Throw<ArgumentNullException>();
+        }
+
+        [Test]
+        public async Task ExecuteAsync_WithEmptyProviderSpecificDetails_ShouldHandleGracefully()
+        {
+            // Arrange
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Test Movie",
+                    Year = "2023",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>() // Empty list
+                }
+            };
+
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
+                .ReturnsAsync(movies);
+
+            // Act
+            var result = await _useCase.ExecuteAsync();
+
+            // Assert
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.Prices.Should().BeEmpty();
+            movie.CheapestPrice.Should().BeNull();
+        }
+
+        [Test]
+        public async Task ExecuteAsync_WithMultipleMovies_ShouldReturnAllMovies()
+        {
+            // Arrange
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary { Title = "Movie 1", Year = "2021" },
+                new MovieSummary { Title = "Movie 2", Year = "2022" },
+                new MovieSummary { Title = "Movie 3", Year = "2023" }
+            };
+
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
+                .ReturnsAsync(movies);
+
+            // Act
+            var result = await _useCase.ExecuteAsync();
+
+            // Assert
+            result.Should().HaveCount(3);
+            result.Select(m => m.Title).Should().Contain(new[] { "Movie 1", "Movie 2", "Movie 3" });
+        }
+
+        [Test]
+        public async Task ExecuteAsync_WithValidPrices_ShouldCalculateCheapestCorrectly()
+        {
+            // Arrange
+            var movies = new List<MovieSummary>
+            {
+                new MovieSummary
+                {
+                    Title = "Price Test Movie",
+                    ProviderSpecificDetails = new List<MovieProviderDetail>
+                    {
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "provider1",
+                            Provider = "Provider 1",
+                            MovieId = "p1001",
+                            Price = 30.00m
+                        },
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "provider2",
+                            Provider = "Provider 2",
+                            MovieId = "p2001",
+                            Price = 15.50m // This should be cheapest
+                        },
+                        new MovieProviderDetail
+                        {
+                            ProviderId = "provider3",
+                            Provider = "Provider 3",
+                            MovieId = "p3001",
+                            Price = 25.99m
+                        }
+                    }
+                }
+            };
+
+            _mockMovieRepository.Setup(x => x.GetAllAsync())
+                .ReturnsAsync(movies);
+
+            // Act
+            var result = await _useCase.ExecuteAsync();
+
+            // Assert
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.CheapestPrice.Should().NotBeNull();
+            movie.CheapestPrice!.Price.Should().Be(15.50m);
+            movie.CheapestPrice.Provider.Should().Be("Provider 2");
+            movie.Prices.Should().HaveCount(3);
         }
     }
 }

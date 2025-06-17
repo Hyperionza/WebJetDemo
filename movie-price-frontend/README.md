@@ -4,19 +4,18 @@ A modern React application built with TypeScript that provides a beautiful, resp
 
 ## 🎬 Features
 
-- **🔍 Movie Search**: Search movies by title, genre, director, or actors
 - **💰 Price Comparison**: View prices from Cinemaworld and Filmworld side-by-side
 - **🏆 Best Deal Highlighting**: Automatically highlights the cheapest price
 - **📱 Responsive Design**: Works seamlessly on desktop, tablet, and mobile
-- **🖼️ Enhanced Images**: Optimized image loading with fallbacks and placeholders
-- **⚡ Real-time Updates**: Live price data with intelligent caching
-- **🎨 Modern UI**: Clean, professional interface with smooth animations
-- **♿ Accessibility**: WCAG compliant with keyboard navigation support
+- **🖼️ Image Handling**: Poster image loading with fallbacks and placeholders
+- **⚡ Data Refresh**: Manual refresh functionality for latest price data
+- **🎨 Clean UI**: Simple, professional interface with movie cards
+- **⚠️ Error Handling**: Basic error states and loading indicators
 
 ## 🏗️ Architecture
 
 ### **Technology Stack**
-- **React 18**: Latest React with concurrent features
+- **React 18**: React with concurrent features
 - **TypeScript**: Type-safe development with IntelliSense
 - **CSS Modules**: Scoped styling with CSS-in-JS benefits
 - **Axios**: HTTP client for API communication
@@ -32,44 +31,26 @@ movie-price-frontend/
 │   └── manifest.json         # PWA manifest
 ├── src/                      # Source code
 │   ├── components/           # React components
-│   │   ├── MovieCard/        # Movie display component
-│   │   │   ├── MovieCard.tsx
-│   │   │   └── MovieCard.module.css
-│   │   ├── MovieList/        # Movie list container
-│   │   │   ├── MovieList.tsx
-│   │   │   └── MovieList.module.css
-│   │   ├── SearchBar/        # Search functionality
-│   │   │   ├── SearchBar.tsx
-│   │   │   └── SearchBar.module.css
-│   │   ├── LoadingSpinner/   # Loading states
-│   │   │   ├── LoadingSpinner.tsx
-│   │   │   └── LoadingSpinner.module.css
-│   │   └── ErrorBoundary/    # Error handling
-│   │       ├── ErrorBoundary.tsx
-│   │       └── ErrorBoundary.module.css
+│   │   ├── MovieCard.tsx     # Movie display component
+│   │   ├── MovieCard.css     # MovieCard styles
+│   │   └── __tests__/        # Component tests
+│   │       └── MovieCard.test.tsx
 │   ├── services/             # API services
-│   │   ├── api.ts           # API client configuration
-│   │   └── movieService.ts  # Movie-specific API calls
+│   │   ├── movieApi.ts       # Movie API service
+│   │   └── __tests__/        # Service tests
+│   │       └── movieApi.test.ts
 │   ├── types/               # TypeScript definitions
-│   │   ├── Movie.ts         # Movie type definitions
-│   │   └── ApiResponse.ts   # API response types
-│   ├── hooks/               # Custom React hooks
-│   │   ├── useMovies.ts     # Movie data management
-│   │   ├── useSearch.ts     # Search functionality
-│   │   └── useDebounce.ts   # Debounced search
-│   ├── utils/               # Utility functions
-│   │   ├── formatters.ts    # Data formatting utilities
-│   │   └── constants.ts     # App constants
-│   ├── styles/              # Global styles
-│   │   ├── globals.css      # Global CSS variables
-│   │   └── components.css   # Shared component styles
+│   │   └── Movie.ts         # Movie type definitions
+│   ├── __tests__/           # App tests
+│   │   └── App.test.tsx     # Main app tests
 │   ├── App.tsx              # Main application component
 │   ├── App.css              # App-level styles
 │   ├── index.tsx            # Application entry point
-│   └── index.css            # Base styles
+│   ├── index.css            # Base styles
+│   └── setupTests.ts        # Test configuration
 ├── package.json             # Dependencies and scripts
 ├── tsconfig.json           # TypeScript configuration
-├── .env.example            # Environment variables template
+├── .env.development         # Development environment variables
 └── Dockerfile              # Container configuration
 ```
 
@@ -78,192 +59,268 @@ movie-price-frontend/
 ### **Component Hierarchy**
 ```
 App
-├── ErrorBoundary
-├── Header
-├── SearchBar
-├── LoadingSpinner (conditional)
-├── MovieList
-│   └── MovieCard (multiple)
-│       ├── MovieImage
-│       ├── MovieInfo
-│       ├── PriceComparison
-│       └── BestDealBadge
-└── Footer
+├── Header (Movie Price Comparison title)
+├── Controls (Refresh button)
+├── Loading/Error states (conditional)
+└── MovieGrid
+    └── MovieCard (multiple)
+        ├── Movie poster with fallback
+        ├── Movie info (title, year, genre, rating)
+        └── Price section (best price + all prices)
 ```
 
 ### **Key Components**
 
+#### **App Component**
+```tsx
+function App() {
+  const [movies, setMovies] = useState<MovieComparison[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadMovies = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const moviesData = await movieApi.getMovies();
+      setMovies(moviesData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load movies');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await movieApi.refreshMovieData();
+      await loadMovies();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh data');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleMovieClick = (movie: MovieComparison) => {
+    // Shows movie details in alert dialog
+    const priceText = movie.prices.map(p => `${p.provider}: $${p.price.toFixed(2)}`).join('\n');
+    const cheapestText = movie.cheapestPrice ? `\nBest Price: ${movie.cheapestPrice.provider} - $${movie.cheapestPrice.price.toFixed(2)}` : '';
+    alert(`Movie Details:\n\nTitle: ${movie.title}\nYear: ${movie.year || 'N/A'}\nGenre: ${movie.genre || 'N/A'}\nDirector: ${movie.director || 'N/A'}\nRating: ${movie.rating || 'N/A'}\n\nPrices:\n${priceText}${cheapestText}`);
+  };
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>🎬 Movie Price Comparison</h1>
+        <div className="controls">
+          <button onClick={handleRefresh} disabled={refreshing} className="refresh-button">
+            {refreshing ? '🔄 Refreshing...' : '🔄 Refresh Data'}
+          </button>
+        </div>
+      </header>
+
+      <main className="App-main">
+        {loading && <div className="loading">Loading movies...</div>}
+        {error && (
+          <div className="error">
+            <p>Error: {error}</p>
+            <button onClick={loadMovies}>Try Again</button>
+          </div>
+        )}
+        {!loading && !error && (
+          <>
+            <div className="movies-count">
+              Found {movies.length} movie{movies.length !== 1 ? 's' : ''}
+            </div>
+            <div className="movies-grid">
+              {movies.map((movie) => (
+                <MovieCard key={movie.id} movie={movie} onClick={handleMovieClick} />
+              ))}
+            </div>
+            {movies.length === 0 && (
+              <div className="no-movies">
+                No movies found. Try refreshing the data or check your search query.
+              </div>
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+```
+
 #### **MovieCard Component**
 ```tsx
 interface MovieCardProps {
-  movie: Movie;
-  onMovieClick?: (movie: Movie) => void;
+  movie: MovieComparison;
+  onClick: (movie: MovieComparison) => void;
 }
 
-const MovieCard: React.FC<MovieCardProps> = ({ movie, onMovieClick }) => {
-  const cheapestPrice = movie.cheapestPrice;
-  
-  return (
-    <div className={styles.movieCard} onClick={() => onMovieClick?.(movie)}>
-      <MovieImage 
-        src={movie.poster} 
-        alt={movie.title}
-        fallback="/images/movie-placeholder.jpg"
-      />
-      <div className={styles.movieInfo}>
-        <h3 className={styles.title}>{movie.title}</h3>
-        <p className={styles.year}>{movie.year}</p>
-        <p className={styles.genre}>{movie.genre}</p>
-        
-        <PriceComparison prices={movie.prices} />
-        
-        {cheapestPrice && (
-          <BestDealBadge 
-            provider={cheapestPrice.provider}
-            price={cheapestPrice.price}
-          />
-        )}
-      </div>
-    </div>
-  );
-};
-```
+const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
 
-#### **SearchBar Component**
-```tsx
-const SearchBar: React.FC = () => {
-  const [query, setQuery] = useState('');
-  const debouncedQuery = useDebounce(query, 300);
-  const { searchMovies, isSearching } = useSearch();
-  
-  useEffect(() => {
-    if (debouncedQuery) {
-      searchMovies(debouncedQuery);
+  const formatPrice = (price: number) => `$${price.toFixed(2)}`;
+
+  const handleImageError = () => {
+    setImageError(true);
+    setImageLoading(false);
+  };
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+  };
+
+  const renderPosterContent = () => {
+    if (!movie.poster || imageError) {
+      return (
+        <div className="poster-placeholder">
+          <div className="poster-icon">🎬</div>
+          <div className="poster-text">{movie.title}</div>
+        </div>
+      );
     }
-  }, [debouncedQuery, searchMovies]);
-  
+
+    return (
+      <>
+        {imageLoading && (
+          <div className="poster-loading" data-testid="poster-loading">
+            <div className="loading-spinner"></div>
+          </div>
+        )}
+        <img
+          src={movie.poster}
+          alt={movie.title}
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          style={{ display: imageLoading ? 'none' : 'block' }}
+        />
+      </>
+    );
+  };
+
   return (
-    <div className={styles.searchContainer}>
-      <input
-        type="text"
-        placeholder="Search movies by title, genre, director, or actors..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className={styles.searchInput}
-      />
-      {isSearching && <LoadingSpinner size="small" />}
-    </div>
+    <button className="movie-card" onClick={() => onClick(movie)} aria-label={movie.title} type="button">
+      <div className="movie-poster">{renderPosterContent()}</div>
+      <div className="movie-info">
+        <h3 className="movie-title">{movie.title}</h3>
+        <p className="movie-year">{movie.year}</p>
+        <p className="movie-genre">{movie.genre}</p>
+        {movie.rating && <p className="movie-rating">⭐ {movie.rating}</p>}
+
+        <div className="price-section">
+          {movie.cheapestPrice && (
+            <div className="best-price">
+              <span className="best-price-label">Best Price:</span>
+              <span className="best-price-value">{formatPrice(movie.cheapestPrice.price)}</span>
+            </div>
+          )}
+          <div className="all-prices">
+            {movie.prices.map((price, index) => (
+              <div key={index} className="price-item">
+                <span className="provider">{price.provider}:</span>
+                <span className="price">{formatPrice(price.price)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </button>
   );
 };
 ```
 
 ## 🔗 API Integration
 
-### **Movie Service**
+### **Movie API Service**
 ```typescript
-// services/movieService.ts
-export class MovieService {
-  private api: AxiosInstance;
-  
-  constructor() {
-    this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5091',
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+// services/movieApi.ts
+import { MovieComparison, MovieDetail } from '../types/Movie';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5091';
+
+class MovieApiService {
+  async getMovies(): Promise<MovieComparison[]> {
+    const response = await fetch(`${API_BASE_URL}/api/movies`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch movies');
+    }
+    return response.json();
+  }
+
+  async getMovieDetail(id: number): Promise<MovieDetail> {
+    const response = await fetch(`${API_BASE_URL}/api/movies/${id}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch movie detail');
+    }
+    return response.json();
+  }
+
+  async refreshMovieData(): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/refresh`, {
+      method: 'POST',
     });
-    
-    this.setupInterceptors();
-  }
-  
-  async getMovies(): Promise<Movie[]> {
-    try {
-      const response = await this.api.get<Movie[]>('/api/movies');
-      return response.data;
-    } catch (error) {
-      throw new ApiError('Failed to fetch movies', error);
-    }
-  }
-  
-  async getMovieById(id: number): Promise<MovieDetail> {
-    try {
-      const response = await this.api.get<MovieDetail>(`/api/movies/${id}`);
-      return response.data;
-    } catch (error) {
-      throw new ApiError(`Failed to fetch movie ${id}`, error);
-    }
-  }
-  
-  async searchMovies(query: string): Promise<Movie[]> {
-    try {
-      const response = await this.api.get<Movie[]>('/api/movies/search', {
-        params: { query }
-      });
-      return response.data;
-    } catch (error) {
-      throw new ApiError('Failed to search movies', error);
+    if (!response.ok) {
+      throw new Error('Failed to refresh movie data');
     }
   }
 }
+
+export const movieApi = new MovieApiService();
 ```
 
-### **Custom Hooks**
-
-#### **useMovies Hook**
+### **TypeScript Types**
 ```typescript
-// hooks/useMovies.ts
-export const useMovies = () => {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const movieService = useMemo(() => new MovieService(), []);
-  
-  const fetchMovies = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await movieService.getMovies();
-      setMovies(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch movies');
-    } finally {
-      setLoading(false);
-    }
-  }, [movieService]);
-  
-  useEffect(() => {
-    fetchMovies();
-  }, [fetchMovies]);
-  
-  return {
-    movies,
-    loading,
-    error,
-    refetch: fetchMovies
-  };
-};
-```
+// types/Movie.ts
+export interface PriceInfo {
+  providerId: string;
+  provider: string;
+  movieId: string;
+  price: number;
+  lastUpdated: string;
+}
 
-#### **useDebounce Hook**
-```typescript
-// hooks/useDebounce.ts
-export const useDebounce = <T>(value: T, delay: number): T => {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  
-  return debouncedValue;
-};
+export interface MovieComparison {
+  id: string;
+  title: string;
+  year?: string;
+  genre?: string;
+  director?: string;
+  actors?: string;
+  plot?: string;
+  poster?: string;
+  rating?: string;
+  prices: PriceInfo[];
+  cheapestPrice?: PriceInfo;
+}
+
+export interface MovieDetail {
+  title: string;
+  year?: string;
+  type?: string;
+  rated?: string;
+  released?: string;
+  runtime?: string;
+  genre?: string;
+  director?: string;
+  writer?: string;
+  actors?: string;
+  plot?: string;
+  language?: string;
+  country?: string;
+  awards?: string;
+  poster?: string;
+  metascore?: string;
+  rating?: string;
+  votes?: string;
+  prices: PriceInfo[];
+  cheapestPrice?: PriceInfo;
+  updatedAt: string;
+}
 ```
 
 ## 🎨 Styling & Design
@@ -650,15 +707,15 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
 ## 🎯 Features Implemented
 
-✅ **Modern React Architecture** with hooks and functional components  
+✅ **Simple React Architecture** with hooks and functional components  
 ✅ **TypeScript Integration** for type safety and better developer experience  
-✅ **Responsive Design** that works on all device sizes  
-✅ **Real-time Search** with debounced input for better performance  
+✅ **Basic Responsive Design** with CSS grid layout  
 ✅ **Price Comparison** with visual highlighting of best deals  
-✅ **Error Handling** with graceful fallbacks and user feedback  
-✅ **Performance Optimization** with lazy loading and code splitting  
-✅ **Accessibility** with WCAG compliance and keyboard navigation  
-✅ **Professional UI** with modern design patterns and animations  
-✅ **Clean Architecture** integration with the backend API  
+✅ **Error Handling** with basic error states and loading indicators  
+✅ **Image Handling** with fallback placeholders for missing posters  
+✅ **Manual Data Refresh** functionality  
+✅ **Movie Details** displayed via alert dialogs  
+✅ **Clean API Integration** with the backend using fetch  
+✅ **Comprehensive Testing** with Jest and React Testing Library  
 
-This frontend provides a polished, professional user experience for comparing movie prices with modern React best practices and Clean Architecture principles.
+This frontend provides a functional, clean interface for comparing movie prices with modern React patterns and TypeScript safety.

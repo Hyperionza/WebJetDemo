@@ -1,8 +1,13 @@
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Moq;
+using MoviePriceComparison.Application.DTOs;
 using MoviePriceComparison.Domain.Entities;
-using MoviePriceComparison.Infrastructure.Data;
+using MoviePriceComparison.Domain.Services;
 using MoviePriceComparison.Infrastructure.Repositories;
+using MoviePriceComparison.Infrastructure.Services;
 using NUnit.Framework;
 
 namespace MoviePriceComparison.Tests.Infrastructure.Repositories
@@ -10,454 +15,516 @@ namespace MoviePriceComparison.Tests.Infrastructure.Repositories
     [TestFixture]
     public class MovieRepositoryTests
     {
-        private MovieDbContext _context;
+        private Mock<IExternalMovieApiService> _mockExternalMovieApiService;
+        private Mock<IApiProviderService> _mockApiProviderService;
+        private Mock<ILogger<MovieRepository>> _mockLogger;
+        private IMemoryCache _memoryCache;
+        private IOptions<ExternalMovieApiCacheSettings> _cacheSettings;
         private MovieRepository _repository;
 
         [SetUp]
         public void SetUp()
         {
-            var options = new DbContextOptionsBuilder<MovieDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options;
+            _mockExternalMovieApiService = new Mock<IExternalMovieApiService>();
+            _mockApiProviderService = new Mock<IApiProviderService>();
+            _mockLogger = new Mock<ILogger<MovieRepository>>();
+            _memoryCache = new MemoryCache(new MemoryCacheOptions());
 
-            _context = new MovieDbContext(options);
-            _repository = new MovieRepository(_context);
+            var cacheSettings = new ExternalMovieApiCacheSettings
+            {
+                CacheDurationMinutes = 5,
+                MaxAgeMinutes = 10
+            };
+            _cacheSettings = Options.Create(cacheSettings);
+
+            _repository = new MovieRepository(
+                _memoryCache,
+                _mockExternalMovieApiService.Object,
+                _mockApiProviderService.Object,
+                _mockLogger.Object,
+                _cacheSettings);
         }
 
         [TearDown]
         public void TearDown()
         {
-            _context.Dispose();
+            _memoryCache.Dispose();
         }
 
         [Test]
-        public void Constructor_WithNullContext_ShouldThrowArgumentNullException()
+        public void Constructor_WithNullCache_ShouldThrowArgumentNullException()
         {
             // Act & Assert
-            var action = () => new MovieRepository(null!);
+            var action = () => new MovieRepository(
+                null!,
+                _mockExternalMovieApiService.Object,
+                _mockApiProviderService.Object,
+                _mockLogger.Object,
+                _cacheSettings);
+
             action.Should().Throw<ArgumentNullException>()
-                .WithParameterName("context");
+                .WithParameterName("cache");
         }
 
         [Test]
-        public async Task GetAllAsync_WithMoviesInDatabase_ShouldReturnAllMoviesOrderedByTitle()
+        public void Constructor_WithNullExternalMovieApiService_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new MovieRepository(
+                _memoryCache,
+                null!,
+                _mockApiProviderService.Object,
+                _mockLogger.Object,
+                _cacheSettings);
+
+            action.Should().Throw<ArgumentNullException>()
+                .WithParameterName("externalMovieApiService");
+        }
+
+        [Test]
+        public void Constructor_WithNullApiProviderService_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new MovieRepository(
+                _memoryCache,
+                _mockExternalMovieApiService.Object,
+                null!,
+                _mockLogger.Object,
+                _cacheSettings);
+
+            action.Should().Throw<ArgumentNullException>()
+                .WithParameterName("apiProviderService");
+        }
+
+        [Test]
+        public void Constructor_WithNullLogger_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new MovieRepository(
+                _memoryCache,
+                _mockExternalMovieApiService.Object,
+                _mockApiProviderService.Object,
+                null!,
+                _cacheSettings);
+
+            action.Should().Throw<ArgumentNullException>()
+                .WithParameterName("logger");
+        }
+
+        [Test]
+        public void Constructor_WithNullCacheSettings_ShouldThrowArgumentNullException()
+        {
+            // Act & Assert
+            var action = () => new MovieRepository(
+                _memoryCache,
+                _mockExternalMovieApiService.Object,
+                _mockApiProviderService.Object,
+                _mockLogger.Object,
+                null!);
+
+            action.Should().Throw<ArgumentNullException>()
+                .WithParameterName("cacheSettings");
+        }
+
+        [Test]
+        public async Task GetAllAsync_WithCachedData_ShouldReturnCachedMovies()
         {
             // Arrange
-            var movie1 = new Movie("Zulu", "1964", "movie");
-            var movie2 = new Movie("Avatar", "2009", "movie");
-            var movie3 = new Movie("Matrix", "1999", "movie");
+            var cachedMovies = new List<MovieSummary>
+            {
+                new MovieSummary { Title = "Cached Movie 1" },
+                new MovieSummary { Title = "Cached Movie 2" }
+            };
 
-            _context.Movies.AddRange(movie1, movie2, movie3);
-            await _context.SaveChangesAsync();
+            _memoryCache.Set("movies_list", cachedMovies);
 
             // Act
             var result = await _repository.GetAllAsync();
 
             // Assert
-            result.Should().HaveCount(3);
-            var movieList = result.ToList();
-            movieList[0].Title.Should().Be("Avatar");
-            movieList[1].Title.Should().Be("Matrix");
-            movieList[2].Title.Should().Be("Zulu");
+            result.Should().HaveCount(2);
+            result.Should().BeEquivalentTo(cachedMovies);
+
+            // Verify external services were not called
+            _mockApiProviderService.Verify(x => x.GetApiProvidersAsync(), Times.Never);
+            _mockExternalMovieApiService.Verify(x => x.GetMoviesFromProviderAsync(It.IsAny<string>()), Times.Never);
         }
 
         [Test]
-        public async Task GetAllAsync_WithEmptyDatabase_ShouldReturnEmptyList()
+        public async Task GetAllAsync_WithoutCachedData_ShouldFetchFromExternalAPIs()
         {
+            // Arrange
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" },
+                new ApiProvider { Id = "filmworld", IsEnabled = true, DisplayName = "Filmworld" }
+            };
+
+            var cinemaworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "cw001", Type = "movie" }
+            };
+
+            var filmworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "fw001", Type = "movie" }
+            };
+
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Genre = "Sci-Fi",
+                Director = "George Lucas",
+                Price = "25.99",
+                Poster = "https://example.com/poster.jpg"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(cinemaworldMovies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("filmworld"))
+                .ReturnsAsync(filmworldMovies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(movieDetail);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("filmworld", "fw001"))
+                .ReturnsAsync(movieDetail);
+
             // Act
             var result = await _repository.GetAllAsync();
 
             // Assert
-            result.Should().BeEmpty();
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.Title.Should().Be("Star Wars");
+            movie.Year.Should().Be("1977");
+            movie.Genre.Should().Be("Sci-Fi");
+            movie.Director.Should().Be("George Lucas");
+            movie.ProviderSpecificDetails.Should().HaveCount(2);
+
+            // Verify data was cached
+            _memoryCache.TryGetValue("movies_list", out var cachedResult).Should().BeTrue();
+            cachedResult.Should().BeEquivalentTo(result);
         }
 
         [Test]
-        public async Task GetByIdAsync_WithExistingMovie_ShouldReturnMovie()
+        public async Task GetAllAsync_WithDisabledProvider_ShouldSkipProvider()
         {
             // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" },
+                new ApiProvider { Id = "filmworld", IsEnabled = false, DisplayName = "Filmworld" }
+            };
+
+            var cinemaworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "cw001", Type = "movie" }
+            };
+
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Price = "25.99"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(cinemaworldMovies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(movieDetail);
 
             // Act
-            var result = await _repository.GetByIdAsync(movie.Id);
-
-            // Assert
-            result.Should().NotBeNull();
-            result!.Title.Should().Be("The Matrix");
-            result.Year.Should().Be("1999");
-        }
-
-        [Test]
-        public async Task GetByIdAsync_WithNonExistentMovie_ShouldReturnNull()
-        {
-            // Act
-            var result = await _repository.GetByIdAsync(999);
-
-            // Assert
-            result.Should().BeNull();
-        }
-
-        [Test]
-        public async Task GetByIdWithPricesAsync_WithExistingMovie_ShouldReturnMovieWithPrices()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var price1 = new MoviePrice(movie.Id, "Cinemaworld", 15.99m);
-            var price2 = new MoviePrice(movie.Id, "Filmworld", 14.99m);
-
-            movie.AddPrice(price1);
-            movie.AddPrice(price2);
-
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.GetByIdWithPricesAsync(movie.Id);
-
-            // Assert
-            result.Should().NotBeNull();
-            result!.Title.Should().Be("The Matrix");
-            result.MoviePrices.Should().HaveCount(2);
-            result.MoviePrices.Should().Contain(p => p.Provider == "Cinemaworld" && p.Price == 15.99m);
-            result.MoviePrices.Should().Contain(p => p.Provider == "Filmworld" && p.Price == 14.99m);
-        }
-
-        [Test]
-        public async Task GetByIdWithPricesAsync_WithNonExistentMovie_ShouldReturnNull()
-        {
-            // Act
-            var result = await _repository.GetByIdWithPricesAsync(999);
-
-            // Assert
-            result.Should().BeNull();
-        }
-
-        [Test]
-        public async Task GetAllWithPricesAsync_ShouldReturnAllMoviesWithPricesOrderedByTitle()
-        {
-            // Arrange
-            var movie1 = new Movie("Zulu", "1964", "movie");
-            var movie2 = new Movie("Avatar", "2009", "movie");
-            var price1 = new MoviePrice(movie1.Id, "Cinemaworld", 12.99m);
-            var price2 = new MoviePrice(movie2.Id, "Filmworld", 18.99m);
-
-            movie1.AddPrice(price1);
-            movie2.AddPrice(price2);
-
-            _context.Movies.AddRange(movie1, movie2);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.GetAllWithPricesAsync();
-
-            // Assert
-            result.Should().HaveCount(2);
-            var movieList = result.ToList();
-            movieList[0].Title.Should().Be("Avatar");
-            movieList[0].MoviePrices.Should().HaveCount(1);
-            movieList[1].Title.Should().Be("Zulu");
-            movieList[1].MoviePrices.Should().HaveCount(1);
-        }
-
-        [Test]
-        public async Task SearchAsync_WithTitleMatch_ShouldReturnMatchingMovies()
-        {
-            // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            var movie2 = new Movie("Matrix Reloaded", "2003", "movie");
-            var movie3 = new Movie("Avatar", "2009", "movie");
-
-            _context.Movies.AddRange(movie1, movie2, movie3);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.SearchAsync("matrix");
-
-            // Assert
-            result.Should().HaveCount(2);
-            result.Should().Contain(m => m.Title == "The Matrix");
-            result.Should().Contain(m => m.Title == "Matrix Reloaded");
-            result.Should().NotContain(m => m.Title == "Avatar");
-        }
-
-        [Test]
-        public async Task SearchAsync_WithGenreMatch_ShouldReturnMatchingMovies()
-        {
-            // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            movie1.UpdateDetails(genre: "Action, Sci-Fi");
-            var movie2 = new Movie("Avatar", "2009", "movie");
-            movie2.UpdateDetails(genre: "Action, Adventure");
-            var movie3 = new Movie("Titanic", "1997", "movie");
-            movie3.UpdateDetails(genre: "Romance, Drama");
-
-            _context.Movies.AddRange(movie1, movie2, movie3);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.SearchAsync("action");
-
-            // Assert
-            result.Should().HaveCount(2);
-            result.Should().Contain(m => m.Title == "The Matrix");
-            result.Should().Contain(m => m.Title == "Avatar");
-            result.Should().NotContain(m => m.Title == "Titanic");
-        }
-
-        [Test]
-        public async Task SearchAsync_WithDirectorMatch_ShouldReturnMatchingMovies()
-        {
-            // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            movie1.UpdateDetails(director: "Lana Wachowski, Lilly Wachowski");
-            var movie2 = new Movie("Inception", "2010", "movie");
-            movie2.UpdateDetails(director: "Christopher Nolan");
-
-            _context.Movies.AddRange(movie1, movie2);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.SearchAsync("wachowski");
+            var result = await _repository.GetAllAsync();
 
             // Assert
             result.Should().HaveCount(1);
-            result.Should().Contain(m => m.Title == "The Matrix");
-            result.Should().NotContain(m => m.Title == "Inception");
+            var movie = result.First();
+            movie.ProviderSpecificDetails.Should().HaveCount(1);
+            movie.ProviderSpecificDetails.First().ProviderId.Should().Be("cinemaworld");
+
+            // Verify filmworld was not called
+            _mockExternalMovieApiService.Verify(x => x.GetMoviesFromProviderAsync("filmworld"), Times.Never);
         }
 
         [Test]
-        public async Task SearchAsync_WithActorMatch_ShouldReturnMatchingMovies()
+        public async Task GetAllAsync_WithProviderError_ShouldContinueWithOtherProviders()
         {
             // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            movie1.UpdateDetails(actors: "Keanu Reeves, Laurence Fishburne");
-            var movie2 = new Movie("John Wick", "2014", "movie");
-            movie2.UpdateDetails(actors: "Keanu Reeves, Michael Nyqvist");
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" },
+                new ApiProvider { Id = "filmworld", IsEnabled = true, DisplayName = "Filmworld" }
+            };
 
-            _context.Movies.AddRange(movie1, movie2);
-            await _context.SaveChangesAsync();
+            var filmworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "fw001", Type = "movie" }
+            };
 
-            // Act
-            var result = await _repository.SearchAsync("keanu");
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Price = "25.99"
+            };
 
-            // Assert
-            result.Should().HaveCount(2);
-            result.Should().Contain(m => m.Title == "The Matrix");
-            result.Should().Contain(m => m.Title == "John Wick");
-        }
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
 
-        [Test]
-        public async Task SearchAsync_WithEmptyQuery_ShouldReturnAllMoviesWithPrices()
-        {
-            // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            var movie2 = new Movie("Avatar", "2009", "movie");
-            _context.Movies.AddRange(movie1, movie2);
-            await _context.SaveChangesAsync();
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ThrowsAsync(new HttpRequestException("API Error"));
 
-            // Act
-            var result = await _repository.SearchAsync("");
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("filmworld"))
+                .ReturnsAsync(filmworldMovies);
 
-            // Assert
-            result.Should().HaveCount(2);
-        }
-
-        [Test]
-        public async Task SearchAsync_WithWhitespaceQuery_ShouldReturnAllMoviesWithPrices()
-        {
-            // Arrange
-            var movie1 = new Movie("The Matrix", "1999", "movie");
-            var movie2 = new Movie("Avatar", "2009", "movie");
-            _context.Movies.AddRange(movie1, movie2);
-            await _context.SaveChangesAsync();
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("filmworld", "fw001"))
+                .ReturnsAsync(movieDetail);
 
             // Act
-            var result = await _repository.SearchAsync("   ");
-
-            // Assert
-            result.Should().HaveCount(2);
-        }
-
-        [Test]
-        public async Task SearchAsync_WithNoMatches_ShouldReturnEmptyList()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.SearchAsync("nonexistent");
-
-            // Assert
-            result.Should().BeEmpty();
-        }
-
-        [Test]
-        public async Task AddAsync_WithValidMovie_ShouldAddMovieToDatabase()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-
-            // Act
-            var result = await _repository.AddAsync(movie);
-
-            // Assert
-            result.Should().Be(movie);
-            result.Id.Should().BeGreaterThan(0);
-
-            var savedMovie = await _context.Movies.FindAsync(result.Id);
-            savedMovie.Should().NotBeNull();
-            savedMovie!.Title.Should().Be("The Matrix");
-        }
-
-        [Test]
-        public async Task AddAsync_WithNullMovie_ShouldThrowArgumentNullException()
-        {
-            // Act & Assert
-            var action = async () => await _repository.AddAsync(null!);
-            await action.Should().ThrowAsync<ArgumentNullException>()
-                .WithParameterName("movie");
-        }
-
-        [Test]
-        public async Task UpdateAsync_WithExistingMovie_ShouldUpdateMovie()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            // Modify the movie
-            movie.UpdateDetails(genre: "Action, Sci-Fi");
-
-            // Act
-            await _repository.UpdateAsync(movie);
-
-            // Assert
-            var updatedMovie = await _context.Movies.FindAsync(movie.Id);
-            updatedMovie.Should().NotBeNull();
-            updatedMovie!.Genre.Should().Be("Action, Sci-Fi");
-        }
-
-        [Test]
-        public async Task UpdateAsync_WithNullMovie_ShouldThrowArgumentNullException()
-        {
-            // Act & Assert
-            var action = async () => await _repository.UpdateAsync(null!);
-            await action.Should().ThrowAsync<ArgumentNullException>()
-                .WithParameterName("movie");
-        }
-
-        [Test]
-        public async Task DeleteAsync_WithExistingMovie_ShouldRemoveMovieFromDatabase()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-            var movieId = movie.Id;
-
-            // Act
-            await _repository.DeleteAsync(movieId);
-
-            // Assert
-            var deletedMovie = await _context.Movies.FindAsync(movieId);
-            deletedMovie.Should().BeNull();
-        }
-
-        [Test]
-        public async Task DeleteAsync_WithNonExistentMovie_ShouldNotThrow()
-        {
-            // Act & Assert
-            var action = async () => await _repository.DeleteAsync(999);
-            await action.Should().NotThrowAsync();
-        }
-
-        [Test]
-        public async Task ExistsAsync_WithExistingMovie_ShouldReturnTrue()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.ExistsAsync(movie.Id);
-
-            // Assert
-            result.Should().BeTrue();
-        }
-
-        [Test]
-        public async Task ExistsAsync_WithNonExistentMovie_ShouldReturnFalse()
-        {
-            // Act
-            var result = await _repository.ExistsAsync(999);
-
-            // Assert
-            result.Should().BeFalse();
-        }
-
-        [Test]
-        public async Task SaveChangesAsync_ShouldPersistChanges()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            _context.Movies.Add(movie);
-
-            // Act
-            await _repository.SaveChangesAsync();
-
-            // Assert
-            movie.Id.Should().BeGreaterThan(0);
-            var savedMovie = await _context.Movies.FindAsync(movie.Id);
-            savedMovie.Should().NotBeNull();
-        }
-
-        [Test]
-        public async Task SearchAsync_ShouldIncludePrices()
-        {
-            // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            var price = new MoviePrice(movie.Id, "Cinemaworld", 15.99m);
-            movie.AddPrice(price);
-
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
-
-            // Act
-            var result = await _repository.SearchAsync("matrix");
+            var result = await _repository.GetAllAsync();
 
             // Assert
             result.Should().HaveCount(1);
-            var foundMovie = result.First();
-            foundMovie.MoviePrices.Should().HaveCount(1);
-            foundMovie.MoviePrices.First().Provider.Should().Be("Cinemaworld");
+            var movie = result.First();
+            movie.ProviderSpecificDetails.Should().HaveCount(1);
+            movie.ProviderSpecificDetails.First().ProviderId.Should().Be("filmworld");
+
+            // Verify error was logged
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Error,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Error fetching movies from provider cinemaworld")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
         }
 
         [Test]
-        public async Task SearchAsync_ShouldBeCaseInsensitive()
+        public async Task GetAllAsync_WithSameMovieFromMultipleProviders_ShouldMergeMovieData()
         {
             // Arrange
-            var movie = new Movie("The Matrix", "1999", "movie");
-            movie.UpdateDetails(genre: "Action, Sci-Fi", director: "Wachowski Sisters", actors: "Keanu Reeves");
-            _context.Movies.Add(movie);
-            await _context.SaveChangesAsync();
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" },
+                new ApiProvider { Id = "filmworld", IsEnabled = true, DisplayName = "Filmworld" }
+            };
 
-            // Act & Assert
-            var titleResult = await _repository.SearchAsync("MATRIX");
-            titleResult.Should().HaveCount(1);
+            var cinemaworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "cw001", Type = "movie" }
+            };
 
-            var genreResult = await _repository.SearchAsync("ACTION");
-            genreResult.Should().HaveCount(1);
+            var filmworldMovies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "fw001", Type = "movie" }
+            };
 
-            var directorResult = await _repository.SearchAsync("WACHOWSKI");
-            directorResult.Should().HaveCount(1);
+            var cinemaworldDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Price = "30.99",
+                Poster = "https://cinemaworld.com/poster.jpg"
+            };
 
-            var actorResult = await _repository.SearchAsync("KEANU");
-            actorResult.Should().HaveCount(1);
+            var filmworldDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Price = "25.99",
+                Poster = "https://filmworld.com/poster.jpg"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(cinemaworldMovies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("filmworld"))
+                .ReturnsAsync(filmworldMovies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(cinemaworldDetail);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("filmworld", "fw001"))
+                .ReturnsAsync(filmworldDetail);
+
+            // Act
+            var result = await _repository.GetAllAsync();
+
+            // Assert
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.Title.Should().Be("Star Wars");
+            movie.ProviderSpecificDetails.Should().HaveCount(2);
+
+            var cinemaworldProvider = movie.ProviderSpecificDetails.First(p => p.ProviderId == "cinemaworld");
+            cinemaworldProvider.Price.Should().Be(30.99m);
+            cinemaworldProvider.PosterUrl.Should().Be("https://cinemaworld.com/poster.jpg");
+
+            var filmworldProvider = movie.ProviderSpecificDetails.First(p => p.ProviderId == "filmworld");
+            filmworldProvider.Price.Should().Be(25.99m);
+            filmworldProvider.PosterUrl.Should().Be("https://filmworld.com/poster.jpg");
+        }
+
+        [Test]
+        public async Task GetAllAsync_WithInvalidPriceFormat_ShouldHandleGracefully()
+        {
+            // Arrange
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" }
+            };
+
+            var movies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Star Wars", Year = "1977", ID = "cw001", Type = "movie" }
+            };
+
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Star Wars",
+                Year = "1977",
+                Price = "invalid_price"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(movies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(movieDetail);
+
+            // Act
+            var result = await _repository.GetAllAsync();
+
+            // Assert
+            result.Should().HaveCount(1);
+            var movie = result.First();
+            movie.ProviderSpecificDetails.Should().HaveCount(1);
+            movie.ProviderSpecificDetails.First().Price.Should().BeNull(); // Default value when parsing fails
+        }
+
+        [Test]
+        public async Task RefreshData_ShouldClearCacheAndRefetchData()
+        {
+            // Arrange
+            var cachedMovies = new List<MovieSummary>
+            {
+                new MovieSummary { Title = "Cached Movie" }
+            };
+            _memoryCache.Set("movies_list", cachedMovies);
+
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" }
+            };
+
+            var movies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Fresh Movie", Year = "2023", ID = "cw001", Type = "movie" }
+            };
+
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Fresh Movie",
+                Year = "2023",
+                Price = "15.99"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockApiProviderService.Setup(x => x.RefreshApiProvidersAsync())
+                .Returns(Task.CompletedTask);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(movies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(movieDetail);
+
+            // Act
+            await _repository.RefreshData();
+
+            // Assert
+            // Verify cache was cleared and new data was fetched
+            _memoryCache.TryGetValue("movies_list", out var newCachedResult).Should().BeTrue();
+            var newMovies = (IEnumerable<MovieSummary>)newCachedResult!;
+            newMovies.Should().HaveCount(1);
+            newMovies.First().Title.Should().Be("Fresh Movie");
+
+            _mockApiProviderService.Verify(x => x.RefreshApiProvidersAsync(), Times.Once);
+        }
+
+        [Test]
+        public async Task GetAllAsync_ShouldSetCorrectCacheOptions()
+        {
+            // Arrange
+            var providers = new List<ApiProvider>
+            {
+                new ApiProvider { Id = "cinemaworld", IsEnabled = true, DisplayName = "Cinemaworld" }
+            };
+
+            var movies = new List<ExternalMovieSummaryDto>
+            {
+                new ExternalMovieSummaryDto { Title = "Test Movie", Year = "2023", ID = "cw001", Type = "movie" }
+            };
+
+            var movieDetail = new ExternalMovieDetailDto
+            {
+                Title = "Test Movie",
+                Year = "2023",
+                Price = "15.99"
+            };
+
+            _mockApiProviderService.Setup(x => x.GetApiProvidersAsync())
+                .ReturnsAsync(providers);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMoviesFromProviderAsync("cinemaworld"))
+                .ReturnsAsync(movies);
+
+            _mockExternalMovieApiService.Setup(x => x.GetMovieDetailsFromProviderAsync("cinemaworld", "cw001"))
+                .ReturnsAsync(movieDetail);
+
+            // Act
+            await _repository.GetAllAsync();
+
+            // Assert
+            _memoryCache.TryGetValue("movies_list", out var cachedResult).Should().BeTrue();
+
+            // Verify logging occurred
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Cache miss - fetching movies from external APIs")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
+
+            _mockLogger.Verify(
+                x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Cached 1 movies for 5 minutes")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Once);
         }
     }
 }

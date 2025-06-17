@@ -1,40 +1,45 @@
 export interface PriceInfo {
+  providerId: string;
   provider: string;
+  movieId: string;
   price: number;
-  freshness: 'Fresh' | 'Cached' | 'Stale';
   lastUpdated: string;
-  freshnessIndicator: string;
 }
 
 export interface MovieComparison {
-  id: number;
+  id: string;
   title: string;
   year?: string;
   genre?: string;
   director?: string;
+  actors?: string;
+  plot?: string;
   poster?: string;
   rating?: string;
   prices: PriceInfo[];
-  bestPrice?: PriceInfo;
+  cheapestPrice?: PriceInfo;
 }
 
-export interface MovieDetail extends MovieComparison {
+export interface MovieDetail {
+  title: string;
+  year?: string;
+  type?: string;
   rated?: string;
   released?: string;
   runtime?: string;
+  genre?: string;
+  director?: string;
   writer?: string;
   actors?: string;
   plot?: string;
   language?: string;
   country?: string;
   awards?: string;
+  poster?: string;
   metascore?: string;
+  rating?: string;
   votes?: string;
-}
-
-export interface ApiHealth {
-  provider: string;
-  isHealthy: boolean;
-  lastChecked: string;
-  errorMessage?: string;
+  prices: PriceInfo[];
+  cheapestPrice?: PriceInfo;
+  updatedAt: string;
 }

@@ -1,4 +1,4 @@
-import { ApiHealth, MovieComparison, MovieDetail } from '../../types/Movie';
+import { MovieComparison, MovieDetail } from '../../types/Movie';
 import { movieApi } from '../movieApi';
 
 // Mock fetch globally
@@ -18,7 +18,7 @@ describe('MovieApiService', () => {
         test('should fetch movies successfully', async () => {
             const mockMovies: MovieComparison[] = [
                 {
-                    id: 1,
+                    id: '1',
                     title: 'The Matrix',
                     year: '1999',
                     prices: []
@@ -56,13 +56,13 @@ describe('MovieApiService', () => {
     describe('getMovieDetail', () => {
         test('should fetch movie detail successfully', async () => {
             const mockMovieDetail: MovieDetail = {
-                id: 1,
                 title: 'The Matrix',
                 year: '1999',
                 genre: 'Action, Sci-Fi',
                 director: 'Wachowski Sisters',
                 plot: 'A computer programmer discovers reality is a simulation.',
-                prices: []
+                prices: [],
+                updatedAt: ''
             };
 
             mockFetch.mockResolvedValueOnce({
@@ -88,9 +88,9 @@ describe('MovieApiService', () => {
 
         test('should handle different movie IDs correctly', async () => {
             const mockMovieDetail: MovieDetail = {
-                id: 42,
                 title: 'Test Movie',
-                prices: []
+                prices: [],
+                updatedAt: ''
             };
 
             mockFetch.mockResolvedValueOnce({
@@ -101,74 +101,6 @@ describe('MovieApiService', () => {
             await movieApi.getMovieDetail(42);
 
             expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/42');
-        });
-    });
-
-    describe('searchMovies', () => {
-        test('should search movies successfully', async () => {
-            const mockSearchResults: MovieComparison[] = [
-                {
-                    id: 1,
-                    title: 'The Matrix',
-                    year: '1999',
-                    prices: []
-                }
-            ];
-
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockSearchResults,
-            } as Response);
-
-            const result = await movieApi.searchMovies('matrix');
-
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/search?query=matrix');
-            expect(result).toEqual(mockSearchResults);
-        });
-
-        test('should encode search query properly', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => [],
-            } as Response);
-
-            await movieApi.searchMovies('the matrix & reloaded');
-
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/search?query=the%20matrix%20%26%20reloaded');
-        });
-
-        test('should handle empty search results', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => [],
-            } as Response);
-
-            const result = await movieApi.searchMovies('nonexistent');
-
-            expect(result).toEqual([]);
-        });
-
-        test('should throw error when search fails', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: false,
-                status: 400,
-                statusText: 'Bad Request',
-            } as Response);
-
-            await expect(movieApi.searchMovies('invalid')).rejects.toThrow('Failed to search movies');
-        });
-
-        test('should handle special characters in search query', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => [],
-            } as Response);
-
-            await movieApi.searchMovies('movie with "quotes" and symbols!@#$%');
-
-            expect(mockFetch).toHaveBeenCalledWith(
-                expect.stringContaining('movie%20with%20%22quotes%22%20and%20symbols!%40%23%24%25')
-            );
         });
     });
 
@@ -202,55 +134,6 @@ describe('MovieApiService', () => {
         });
     });
 
-    describe('getApiHealth', () => {
-        test('should fetch API health successfully', async () => {
-            const mockApiHealth: ApiHealth[] = [
-                {
-                    provider: 'Cinemaworld',
-                    isHealthy: true,
-                    lastChecked: '2023-01-01T00:00:00Z'
-                },
-                {
-                    provider: 'Filmworld',
-                    isHealthy: false,
-                    lastChecked: '2023-01-01T00:00:00Z',
-                    errorMessage: 'Service unavailable'
-                }
-            ];
-
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockApiHealth,
-            } as Response);
-
-            const result = await movieApi.getApiHealth();
-
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/health');
-            expect(result).toEqual(mockApiHealth);
-        });
-
-        test('should throw error when health check fails', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: false,
-                status: 503,
-                statusText: 'Service Unavailable',
-            } as Response);
-
-            await expect(movieApi.getApiHealth()).rejects.toThrow('Failed to fetch API health');
-        });
-
-        test('should handle empty health response', async () => {
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => [],
-            } as Response);
-
-            const result = await movieApi.getApiHealth();
-
-            expect(result).toEqual([]);
-        });
-    });
-
     describe('error handling', () => {
         test('should handle JSON parsing errors', async () => {
             mockFetch.mockResolvedValueOnce({
@@ -258,7 +141,7 @@ describe('MovieApiService', () => {
                 json: async () => {
                     throw new Error('Invalid JSON');
                 },
-            } as Response);
+            } as unknown as Response);
 
             await expect(movieApi.getMovies()).rejects.toThrow('Invalid JSON');
         });
@@ -289,15 +172,11 @@ describe('MovieApiService', () => {
             // Test all endpoints
             await movieApi.getMovies();
             await movieApi.getMovieDetail(1);
-            await movieApi.searchMovies('test');
-            await movieApi.getApiHealth();
             await movieApi.refreshMovieData();
 
             const calls = mockFetch.mock.calls;
             expect(calls[0][0]).toBe(`${baseUrl}/movies`);
             expect(calls[1][0]).toBe(`${baseUrl}/movies/1`);
-            expect(calls[2][0]).toBe(`${baseUrl}/movies/search?query=test`);
-            expect(calls[3][0]).toBe(`${baseUrl}/movies/health`);
             expect(calls[4][0]).toBe(`${baseUrl}/movies/refresh`);
         });
 
@@ -309,8 +188,6 @@ describe('MovieApiService', () => {
 
             await movieApi.getMovies();
             await movieApi.getMovieDetail(1);
-            await movieApi.searchMovies('test');
-            await movieApi.getApiHealth();
             await movieApi.refreshMovieData();
 
             const calls = mockFetch.mock.calls;
@@ -318,8 +195,6 @@ describe('MovieApiService', () => {
             // GET requests (default method)
             expect(calls[0][1]).toBeUndefined(); // getMovies
             expect(calls[1][1]).toBeUndefined(); // getMovieDetail
-            expect(calls[2][1]).toBeUndefined(); // searchMovies
-            expect(calls[3][1]).toBeUndefined(); // getApiHealth
 
             // POST request
             expect(calls[4][1]).toEqual({ method: 'POST' }); // refreshMovieData

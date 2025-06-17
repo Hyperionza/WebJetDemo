@@ -1,9 +1,10 @@
 namespace MoviePriceComparison.Domain.Entities
 {
-    public class MovieProviderSpecificDetail
+    public class MovieProviderDetail
     {
         public required string ProviderId { get; set; }
         public required string MovieId { get; set; }
+        public required string Provider { get; set; }
         public string? PosterUrl { get; set; }
         public decimal? Price { get; set; }
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -9,11 +9,9 @@ const mockMovieApi = movieApi as jest.Mocked<typeof movieApi>;
 test('renders movie price comparison app', async () => {
   // Mock API responses
   mockMovieApi.getMovies.mockResolvedValue([]);
-  mockMovieApi.getApiHealth.mockResolvedValue([]);
 
   render(<App />);
 
   // Check for main heading
   expect(screen.getByText('🎬 Movie Price Comparison')).toBeInTheDocument();
-  expect(screen.getByText('Compare movie prices from Cinemaworld and Filmworld')).toBeInTheDocument();
 });

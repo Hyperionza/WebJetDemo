@@ -68,14 +68,11 @@ const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
         {movie.rating && <p className="movie-rating">⭐ {movie.rating}</p>}
 
         <div className="price-section">
-          {movie.bestPrice && (
+          {movie.cheapestPrice && (
             <div className="best-price">
               <span className="best-price-label">Best Price:</span>
               <span className="best-price-value">
-                {formatPrice(movie.bestPrice.price)}
-              </span>
-              <span className="freshness-indicator">
-                {movie.bestPrice.freshnessIndicator}
+                {formatPrice(movie.cheapestPrice.price)}
               </span>
             </div>
           )}
@@ -85,7 +82,6 @@ const MovieCard: React.FC<MovieCardProps> = ({ movie, onClick }) => {
               <div key={index} className="price-item">
                 <span className="provider">{price.provider}:</span>
                 <span className="price">{formatPrice(price.price)}</span>
-                <span className="freshness">{price.freshnessIndicator}</span>
               </div>
             ))}
           </div>

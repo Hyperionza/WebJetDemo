@@ -54,13 +54,15 @@ namespace MoviePriceComparison.Infrastructure.Services
                 }
 
                 var content = await response.Content.ReadAsStringAsync();
-                var movieDtos = JsonSerializer.Deserialize<ExternalMovieSummaryDto[]>(content, new JsonSerializerOptions
+                // output the message to console becuase its failing to deserialize
+                _logger.LogDebug(content);
+                var pasrsedResponse = JsonSerializer.Deserialize<ExternalMoviesResponseDto>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                return movieDtos ?? Enumerable.Empty<ExternalMovieSummaryDto>();
-            }
+                return pasrsedResponse?.Movies ?? Enumerable.Empty<ExternalMovieSummaryDto>();
+			}
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting movies from provider {ProviderId}", providerId);
@@ -100,6 +102,9 @@ namespace MoviePriceComparison.Infrastructure.Services
                 }
 
                 var content = await response.Content.ReadAsStringAsync();
+                // output the message to console becuase its failing to deserialize
+                _logger.LogDebug(content);
+
                 var movieDto = JsonSerializer.Deserialize<ExternalMovieDetailDto>(content, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
@@ -115,8 +120,13 @@ namespace MoviePriceComparison.Infrastructure.Services
         }
     }
 
-    // DTOs for external API responses
-    public class ExternalMovieSummaryDto
+	public class ExternalMoviesResponseDto
+	{
+		public ExternalMovieSummaryDto[] Movies { get; set; } = Array.Empty<ExternalMovieSummaryDto>();
+	}
+
+	// DTOs for external API responses
+	public class ExternalMovieSummaryDto
     {
         public string ID { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;

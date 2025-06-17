@@ -8,50 +8,52 @@ namespace MoviePriceComparison.Application.UseCases
         Task<IEnumerable<MovieComparisonDto>> ExecuteAsync();
     }
 
-    public class GetMoviesWithPricesUseCase : IGetMoviesWithPricesUseCase
+    public class GetMoviesWithPricesUseCase : UseCaseBase, IGetMoviesWithPricesUseCase
     {
-        private readonly IMovieRepository _movieRepository;
+        public GetMoviesWithPricesUseCase(IMovieRepository movieRepository, HttpClient httpClient) : base(movieRepository, httpClient) { }
 
-        public GetMoviesWithPricesUseCase(IMovieRepository movieRepository)
-        {
-            _movieRepository = movieRepository ?? throw new ArgumentNullException(nameof(movieRepository));
-        }
 
         public async Task<IEnumerable<MovieComparisonDto>> ExecuteAsync()
         {
-            var movies = await _movieRepository.GetAllWithPricesAsync();
-
-            return movies.Select(movie => new MovieComparisonDto
+            List<MovieComparisonDto> result = new();
+            var movies = await _movieRepository.GetAllAsync();
+            foreach (var movie in movies)
             {
-                Id = movie.Id,
-                Title = movie.Title,
-                Year = movie.Year,
-                Genre = movie.Genre,
-                Director = movie.Director,
-                Actors = movie.Actors,
-                Plot = movie.Plot,
-                Poster = movie.Poster,
-                Rating = movie.Rating,
-                Prices = movie.MoviePrices.Select(price => new MoviePriceDto
+                var cheapestProvider = movie.ProviderSpecificDetails.MinBy(x => x.Price);
+
+                // Get a valid poster URL from the provider-specific details
+                var validPosterUrl = await GetValidPosterUrlAsync(movie.ProviderSpecificDetails);
+
+                result.Add(new MovieComparisonDto
                 {
-                    Provider = price.Provider,
-                    Price = price.Price,
-                    Currency = price.Currency,
-                    IsAvailable = price.IsAvailable,
-                    LastUpdated = price.LastUpdated,
-                    ErrorMessage = price.ErrorMessage
-                }).ToList(),
-                CheapestPrice = movie.GetCheapestPrice() != null ? new MoviePriceDto
-                {
-                    Provider = movie.GetCheapestPrice()!.Provider,
-                    Price = movie.GetCheapestPrice()!.Price,
-                    Currency = movie.GetCheapestPrice()!.Currency,
-                    IsAvailable = movie.GetCheapestPrice()!.IsAvailable,
-                    LastUpdated = movie.GetCheapestPrice()!.LastUpdated,
-                    ErrorMessage = movie.GetCheapestPrice()!.ErrorMessage
-                } : null,
-                HasValidPrices = movie.HasValidPrices()
-            });
+                    Title = movie.Title,
+                    Year = movie.Year,
+                    Genre = movie.Genre,
+                    Director = movie.Director,
+                    Actors = movie.Actors,
+                    Plot = movie.Plot,
+                    Poster = validPosterUrl,
+                    Rating = movie.Rating,
+                    Prices = movie.ProviderSpecificDetails.Select(price => new MoviePriceDto
+                    {
+                        ProviderId = price.ProviderId,
+                        Provider = price.Provider,
+                        MovieId = price.MovieId,
+                        Price = price.Price,
+                        LastUpdated = price.UpdatedAt,
+                    }).ToList(),
+                    CheapestPrice = cheapestProvider != null ? new MoviePriceDto
+                    {
+                        Provider = cheapestProvider.Provider,
+                        ProviderId = cheapestProvider.ProviderId,
+                        MovieId = cheapestProvider.MovieId,
+                        Price = cheapestProvider.Price,
+                        LastUpdated = cheapestProvider.UpdatedAt
+                    } : null
+                });
+            }
+
+            return result;
         }
     }
 }

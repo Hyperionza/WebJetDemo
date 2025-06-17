@@ -13,18 +13,4 @@ namespace MoviePriceComparison.Application.DTOs
         public ApiEndpoints Endpoints { get; set; } = new();
         public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
     }
-
-    public class ApiEndpoints
-    {
-        public string Movies { get; set; } = "/movies";
-        public string MovieDetail { get; set; } = "/movie/{id}";
-    }
-
-    // used by the hypothetical 3rd party movie provider api microservice
-    // public class ApiProvidersResponse
-    // {
-    //     public List<ApiProvider> Providers { get; set; } = new();
-    //     public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
-    //     public string Version { get; set; } = "1.0";
-    // }
 }

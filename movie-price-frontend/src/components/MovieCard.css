@@ -106,10 +106,6 @@
   font-size: 1.1em;
 }
 
-.freshness-indicator {
-  font-size: 1.2em;
-}
-
 .all-prices {
   display: flex;
   flex-direction: column;
@@ -132,10 +128,6 @@
 .price {
   font-weight: bold;
   color: #333;
-}
-
-.freshness {
-  font-size: 1em;
 }
 
 /* Poster placeholder and loading styles */

@@ -5,34 +5,34 @@ import MovieCard from '../MovieCard';
 
 // Mock movie data
 const mockMovie: MovieComparison = {
-    id: 1,
+    id: '1',
     title: 'The Matrix',
     year: '1999',
     genre: 'Action, Sci-Fi',
     director: 'Wachowski Sisters',
     poster: 'https://example.com/matrix.jpg',
     rating: '8.7',
-    bestPrice: {
+    cheapestPrice: {
+        providerId: 'filmworld',
         provider: 'Filmworld',
+        movieId: 'fw001',
         price: 14.99,
-        freshness: 'Fresh',
-        lastUpdated: '2023-01-01T00:00:00Z',
-        freshnessIndicator: '🟢'
+        lastUpdated: '2023-01-01T00:00:00Z'
     },
     prices: [
         {
+            providerId: 'cinemaworld',
             provider: 'Cinemaworld',
+            movieId: 'cw001',
             price: 15.99,
-            freshness: 'Fresh',
-            lastUpdated: '2023-01-01T00:00:00Z',
-            freshnessIndicator: '🟢'
+            lastUpdated: '2023-01-01T00:00:00Z'
         },
         {
+            providerId: 'filmworld',
             provider: 'Filmworld',
+            movieId: 'fw001',
             price: 14.99,
-            freshness: 'Fresh',
-            lastUpdated: '2023-01-01T00:00:00Z',
-            freshnessIndicator: '🟢'
+            lastUpdated: '2023-01-01T00:00:00Z'
         }
     ]
 };
@@ -44,7 +44,7 @@ const mockMovieWithoutPoster: MovieComparison = {
 
 const mockMovieWithoutBestPrice: MovieComparison = {
     ...mockMovie,
-    bestPrice: undefined
+    cheapestPrice: undefined
 };
 
 describe('MovieCard', () => {
@@ -68,7 +68,6 @@ describe('MovieCard', () => {
 
         expect(screen.getByText('Best Price:')).toBeInTheDocument();
         expect(screen.getAllByText('$14.99')).toHaveLength(2); // Best price + provider price
-        expect(screen.getAllByText('🟢')).toHaveLength(3); // Best price + 2 provider freshness
     });
 
     test('does not display best price section when not available', () => {
@@ -146,11 +145,11 @@ describe('MovieCard', () => {
             ...mockMovie,
             prices: [
                 {
+                    providerId: 'testprovider',
                     provider: 'TestProvider',
+                    movieId: 'test001',
                     price: 12.5,
-                    freshness: 'Fresh',
-                    lastUpdated: '2023-01-01T00:00:00Z',
-                    freshnessIndicator: '🟢'
+                    lastUpdated: '2023-01-01T00:00:00Z'
                 }
             ]
         };
@@ -172,41 +171,6 @@ describe('MovieCard', () => {
         // Should still render the card but without price information
     });
 
-    test('displays freshness indicators for all prices', () => {
-        const movieWithMixedFreshness: MovieComparison = {
-            ...mockMovie,
-            prices: [
-                {
-                    provider: 'Provider1',
-                    price: 15.99,
-                    freshness: 'Fresh',
-                    lastUpdated: '2023-01-01T00:00:00Z',
-                    freshnessIndicator: '🟢'
-                },
-                {
-                    provider: 'Provider2',
-                    price: 16.99,
-                    freshness: 'Cached',
-                    lastUpdated: '2023-01-01T00:00:00Z',
-                    freshnessIndicator: '🟡'
-                },
-                {
-                    provider: 'Provider3',
-                    price: 17.99,
-                    freshness: 'Stale',
-                    lastUpdated: '2023-01-01T00:00:00Z',
-                    freshnessIndicator: '🔴'
-                }
-            ]
-        };
-
-        render(<MovieCard movie={movieWithMixedFreshness} onClick={mockOnClick} />);
-
-        expect(screen.getAllByText('🟢')).toHaveLength(2); // Best price + provider freshness
-        expect(screen.getByText('🟡')).toBeInTheDocument();
-        expect(screen.getByText('🔴')).toBeInTheDocument();
-    });
-
     test('has proper accessibility attributes', () => {
         render(<MovieCard movie={mockMovie} onClick={mockOnClick} />);
 
@@ -216,7 +180,7 @@ describe('MovieCard', () => {
 
     test('handles missing optional fields gracefully', () => {
         const minimalMovie: MovieComparison = {
-            id: 1,
+            id: '1',
             title: 'Minimal Movie',
             prices: []
         };

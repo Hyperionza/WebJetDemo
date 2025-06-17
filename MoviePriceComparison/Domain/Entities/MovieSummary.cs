@@ -19,7 +19,7 @@ namespace MoviePriceComparison.Domain.Entities
         public string? Metascore { get; set; }
         public string? Rating { get; set; }
         public string? Votes { get; set; }
-        public List<MovieProviderSpecificDetail> ProviderSpecificDetails { get; set; } = new();
+        public List<MovieProviderDetail> ProviderSpecificDetails { get; set; } = new();
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         public void UpdateDetails(
@@ -59,7 +59,7 @@ namespace MoviePriceComparison.Domain.Entities
             UpdatedAt = DateTime.UtcNow;
         }
 
-        public void AddDetail(MovieProviderSpecificDetail detail)
+        public void AddDetail(MovieProviderDetail detail)
         {
             if (detail == null)
                 throw new ArgumentNullException(nameof(detail));
@@ -71,7 +71,7 @@ namespace MoviePriceComparison.Domain.Entities
             UpdatedAt = DateTime.UtcNow;
         }
 
-        public MovieProviderSpecificDetail? GetCheapestPrice()
+        public MovieProviderDetail? GetCheapestPrice()
         {
             return ProviderSpecificDetails
                 .Where(p => p.Price.HasValue && p.Price > 0)

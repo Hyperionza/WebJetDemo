@@ -39,9 +39,13 @@ builder.Services.Configure<ApiProviderConfiguration>(options =>
     // Set the 3rd party movie provider api administration service URL to our own mock endpoint for demo purposes
     // In production, this would point to an external microservice
     options.ApiProviderServiceUrl = builder.Configuration["ApiProviderService:ApiProviderServiceUrl"] ?? "";
-    options.CacheDurationMinutes = builder.Configuration.GetValue<int>("ApiProviderService:ApiProviderServiceUrl", 15);
-    options.TimeoutSeconds = builder.Configuration.GetValue<int>("ApiProviderService:ApiProviderServiceUrl", 30);
+    options.CacheDurationMinutes = builder.Configuration.GetValue<int>("ApiProviderService:CacheDurationMinutes", 15);
+    options.TimeoutSeconds = builder.Configuration.GetValue<int>("ApiProviderService:TimeoutSeconds", 30);
 });
+
+// Configure external movie API cache settings
+builder.Services.Configure<MoviePriceComparison.Infrastructure.Repositories.ExternalMovieApiCacheSettings>(
+    builder.Configuration.GetSection("ExternalMovieApiCacheSettings"));
 
 // Configure HTTP clients
 builder.Services.AddHttpClient<IExternalMovieApiService, ExternalMovieApiService>(client =>
@@ -54,6 +58,12 @@ builder.Services.AddHttpClient<IApiProviderService, ApiProviderService>(client =
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
+// Add HttpClient for poster URL validation
+builder.Services.AddHttpClient<GetMovieDetailUseCase>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10); // Shorter timeout for image validation
+});
+
 // Register Clean Architecture layers
 // Domain layer (no dependencies)
 // Application layer
@@ -62,6 +72,7 @@ builder.Services.AddScoped<IGetMovieDetailUseCase, GetMovieDetailUseCase>();
 
 // Infrastructure layer
 builder.Services.AddScoped<IExternalMovieApiService, ExternalMovieApiService>();
+builder.Services.AddScoped<MoviePriceComparison.Domain.Repositories.IMovieRepository, MoviePriceComparison.Infrastructure.Repositories.MovieRepository>();
 
 // Register new dynamic API provider services
 builder.Services.AddScoped<IApiProviderService, ApiProviderService>();
@@ -71,10 +82,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "https://localhost:3000", "http://localhost:3001", "https://localhost:3001")
+        policy.AllowAnyOrigin()
+        //policy.WithOrigins("http://localhost:3000", "https://localhost:3000", "http://localhost:3001", "https://localhost:3001")
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
+              //.AllowCredintials();
     });
 });
 

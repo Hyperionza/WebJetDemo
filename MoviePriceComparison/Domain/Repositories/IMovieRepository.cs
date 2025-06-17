@@ -5,7 +5,5 @@ namespace MoviePriceComparison.Domain.Repositories
     public interface IMovieRepository
     {
         Task<IEnumerable<MovieSummary>> GetAllAsync();
-
-        Task<MovieSummary?> GetByTitleAsync(string title);
     }
 }

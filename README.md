@@ -15,25 +15,23 @@ A full-stack web application that compares movie prices from multiple providers 
 ## 🏗️ Architecture
 
 ### Backend (.NET 9)
-- **ASP.NET Core Web API** with Entity Framework Core
-- **SQL Server Database** with Entity Framework Core (Code First)
+- **ASP.NET Core Web API** with Clean Architecture principles
 - **Dynamic API Provider System** with configurable external providers
-- **Redis Distributed Cache** 
-- **Circuit Breaker Pattern** for resilient external API calls
+- **Redis Distributed Cache** for performance optimization
+- **In-memory data storage** with repository pattern
 - **Health Checks** for monitoring system status
 - **Comprehensive Logging** with structured logging
 
 ### Frontend (React 18)
 - **TypeScript** for type safety
 - **Modern React** with hooks and functional components
-- **Responsive Design** with CSS Grid and Flexbox
-- **Error Boundaries** for graceful error handling
-- **Loading States** and user feedback
+- **Simple responsive design** with CSS
+- **Basic error handling** and loading states
+- **Direct API integration** with fetch
 
 ### Infrastructure
-- **Azure App Service** for backend hosting
-- **Azure Static Web Apps** for frontend hosting
-- **Azure SQL Database** for data persistence
+- **Docker containerization** for both frontend and backend
+- **Development container** support with SQL Server and Redis
 - **GitHub Actions** for CI/CD pipeline
 
 ## 🚀 Quick Start
@@ -193,8 +191,8 @@ main → staging → production
 ### API Endpoints
 - `GET /api/movies` - Get all movies with price comparison
 - `GET /api/movies/{id}` - Get specific movie details
+- `POST /api/refresh` - Refresh movie data from external APIs
 - `GET /health` - Health check endpoint with environment info
-- `GET /api/health` - API health status
 - `GET /api/providers` - Get current API provider configurations
 - `POST /api/providers/refresh` - Refresh API provider cache
 
@@ -216,24 +214,28 @@ main → staging → production
 ├── MoviePriceComparison/         # .NET Backend (Clean Architecture)
 │   ├── Controllers/              # API Controllers
 │   ├── Application/              # Use Cases & Application Logic
-│   │   └── UseCases/            # Clean Architecture Use Cases
+│   │   ├── UseCases/            # Clean Architecture Use Cases
+│   │   └── ViewModels/          # DTOs and Response Models
 │   ├── Domain/                   # Domain Models & Interfaces
-│   │   ├── Entities/            # Domain Entities
+│   │   ├── Entities/            # Domain Entities (MovieSummary, MovieProviderDetail)
 │   │   ├── Repositories/        # Repository Interfaces
 │   │   └── Services/            # Domain Service Interfaces
 │   ├── Infrastructure/           # External Concerns
-│   │   ├── Data/                # Entity Framework Context
 │   │   ├── Repositories/        # Repository Implementations
 │   │   └── Services/            # External Service Implementations
-│   ├── Models/                   # DTOs & Configuration Models
-│   └── Services/                 # Legacy Application Services
+│   ├── Program.cs               # Application entry point & DI configuration
+│   ├── appsettings.json         # Configuration
+│   └── Dockerfile               # Container configuration
 ├── MoviePriceComparison.Tests/   # Backend Unit Tests
 ├── movie-price-frontend/         # React Frontend
 │   ├── src/
-│   │   ├── components/           # React Components
-│   │   ├── services/             # API Services
-│   │   ├── types/                # TypeScript Types
+│   │   ├── components/           # React Components (MovieCard)
+│   │   ├── services/             # API Services (movieApi)
+│   │   ├── types/                # TypeScript Types (Movie interfaces)
 │   │   └── __tests__/            # Component Tests
+│   ├── public/                   # Static assets
+│   ├── package.json              # Dependencies and scripts
+│   └── Dockerfile                # Container configuration
 ├── .github/workflows/            # CI/CD Pipelines
 ├── .devcontainer/                # Development Container Config
 └── README files for each component
@@ -276,44 +278,6 @@ main → staging → production
 - Ensure all CI checks pass
 
 ## 📝 API Documentation
-
-### Movie Response Format
-```json
-{
-  "id": 1,
-  "title": "The Matrix",
-  "year": "1999",
-  "genre": "Action, Sci-Fi",
-  "director": "Wachowski Sisters",
-  "poster": "https://example.com/poster.jpg",
-  "rating": "8.7",
-  "bestPrice": {
-    "provider": "Filmworld",
-    "price": 14.99,
-    "freshness": "Fresh",
-    "freshnessIndicator": "🟢"
-  },
-  "prices": [
-    {
-      "provider": "Cinemaworld",
-      "price": 15.99,
-      "freshness": "Fresh",
-      "freshnessIndicator": "🟢"
-    },
-    {
-      "provider": "Filmworld", 
-      "price": 14.99,
-      "freshness": "Fresh",
-      "freshnessIndicator": "🟢"
-    }
-  ]
-}
-```
-
-## 🐛 Known Issues
-
-- Frontend test: "displays placeholder when poster is not available" has assertion mismatch
-- Occasional timeout on external API calls during high load
 
 ## 📄 License
 

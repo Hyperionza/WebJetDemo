@@ -72,62 +72,67 @@ MoviePriceComparison/
 
 ## 🎯 Domain Layer
 
-### **Rich Domain Entities**
+### **Domain Entities**
 
-#### **Movie Entity (Aggregate Root)**
+#### **MovieSummary Entity**
 ```csharp
-public class Movie
+public class MovieSummary
 {
-    // Encapsulated properties with private setters
-    public string Title { get; private set; }
-    public DateTime CreatedAt { get; private set; }
-    
-    // Business logic methods
-    public MoviePrice? GetCheapestPrice()
+    public string Title { get; set; } = null!;
+    public string? Year { get; set; }
+    public string? Type { get; set; }
+    public string? Rated { get; set; }
+    public string? Released { get; set; }
+    public string? Runtime { get; set; }
+    public string? Genre { get; set; }
+    public string? Director { get; set; }
+    public string? Writer { get; set; }
+    public string? Actors { get; set; }
+    public string? Plot { get; set; }
+    public string? Language { get; set; }
+    public string? Country { get; set; }
+    public string? Awards { get; set; }
+    public string? Metascore { get; set; }
+    public string? Rating { get; set; }
+    public string? Votes { get; set; }
+    public List<MovieProviderDetail> ProviderSpecificDetails { get; set; } = new();
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public MovieProviderDetail? GetCheapestPrice()
     {
-        return _moviePrices
-            .Where(p => p.Price.HasValue)
+        return ProviderSpecificDetails
+            .Where(p => p.Price.HasValue && p.Price > 0)
             .OrderBy(p => p.Price!.Value)
             .FirstOrDefault();
     }
     
-    public bool HasValidPrices()
+    public void AddDetail(MovieProviderDetail detail)
     {
-        return _moviePrices.Any(p => p.Price.HasValue && p.Price > 0);
-    }
-    
-    public void AddPrice(MoviePrice price)
-    {
-        // Business rule enforcement
-        if (price == null)
-            throw new ArgumentNullException(nameof(price));
-        
-        _moviePrices.Add(price);
+        if (detail == null)
+            throw new ArgumentNullException(nameof(detail));
+
+        // Remove previous if exists
+        ProviderSpecificDetails.RemoveAll(x => x.ProviderId == detail.ProviderId && x.MovieId == detail.MovieId);
+        ProviderSpecificDetails.Add(detail);
         UpdatedAt = DateTime.UtcNow;
     }
 }
 ```
 
-#### **MoviePrice Value Object**
+#### **MovieProviderDetail Entity**
 ```csharp
-public class MoviePrice
+public class MovieProviderDetail
 {
-    // Immutable value object with behavior
-    public decimal? Price { get; private set; }
-    public string Provider { get; private set; }
-    public bool IsAvailable { get; private set; }
-    
-    public void UpdatePrice(decimal? price, string? errorMessage = null)
-    {
-        Price = price;
-        IsAvailable = price.HasValue && price > 0;
-        ErrorMessage = errorMessage;
-        LastUpdated = DateTime.UtcNow;
-    }
-    
+    public required string ProviderId { get; set; }
+    public required string MovieId { get; set; }
+    public required string Provider { get; set; }
+    public string? PosterUrl { get; set; }
+    public decimal? Price { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
     public bool IsStale(TimeSpan maxAge)
     {
-        return DateTime.UtcNow - LastUpdated > maxAge;
+        return DateTime.UtcNow - UpdatedAt > maxAge;
     }
 }
 ```
@@ -168,7 +173,6 @@ public class GetMoviesWithPricesUseCase : IGetMoviesWithPricesUseCase
             Id = movie.Id,
             Title = movie.Title,
             CheapestPrice = MapToDto(movie.GetCheapestPrice()),
-            HasValidPrices = movie.HasValidPrices()
         });
     }
 }
@@ -182,7 +186,6 @@ public class MovieComparisonDto
     public string Title { get; set; } = string.Empty;
     public List<MoviePriceDto> Prices { get; set; } = new();
     public MoviePriceDto? CheapestPrice { get; set; }
-    public bool HasValidPrices { get; set; }
 }
 ```
 
@@ -362,8 +365,7 @@ Get all movies with price comparison
     "provider": "Filmworld",
     "price": 14.99,
     "currency": "AUD"
-  },
-  "hasValidPrices": true
+  }
 }
 ```
 
@@ -382,13 +384,17 @@ Get detailed movie information
   "director": "Lana Wachowski, Lilly Wachowski",
   "plot": "A computer hacker learns...",
   "prices": [...],
-  "cheapestPrice": {...},
-  "hasValidPrices": true
+  "cheapestPrice": {...}
 }
 ```
 
-#### **GET /api/movies/search?query={query}**
-Search movies by title, genre, director, or actors
+#### **POST /api/refresh**
+Refresh movie data from external APIs
+```json
+{
+  "message": "Movie data refreshed successfully"
+}
+```
 
 #### **GET /health**
 System health check endpoint with environment information

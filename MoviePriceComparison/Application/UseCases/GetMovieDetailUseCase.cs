@@ -1,31 +1,34 @@
 using MoviePriceComparison.Application.DTOs;
+using MoviePriceComparison.Domain.Repositories;
+using MoviePriceComparison.Infrastructure.Services;
+using MoviePriceComparison.Domain.Entities;
+using System.Net.Http;
 
 namespace MoviePriceComparison.Application.UseCases
 {
     public interface IGetMovieDetailUseCase
     {
-        Task<MovieDetailResponseDto?> ExecuteAsync(int movieId);
+        Task<MovieDetailResponseDto?> ExecuteAsync(string movieId);
     }
 
-    public class GetMovieDetailUseCase : IGetMovieDetailUseCase
+    public class GetMovieDetailUseCase : UseCaseBase, IGetMovieDetailUseCase
     {
-        private readonly IMovieRepository _movieRepository;
+        public GetMovieDetailUseCase(IMovieRepository movieRepository, HttpClient httpClient) : base(movieRepository, httpClient) { }
 
-        public GetMovieDetailUseCase(IMovieRepository movieRepository)
+        public async Task<MovieDetailResponseDto?> ExecuteAsync(string movieId)
         {
-            _movieRepository = movieRepository ?? throw new ArgumentNullException(nameof(movieRepository));
-        }
-
-        public async Task<MovieDetailResponseDto?> ExecuteAsync(int movieId)
-        {
-            var movie = await _movieRepository.GetByIdWithPricesAsync(movieId);
-
+            var movies = await _movieRepository.GetAllAsync();
+            var movie = movies.FirstOrDefault(x => x.ProviderSpecificDetails.Any(a => a.MovieId == movieId));
             if (movie == null)
                 return null;
 
+            var cheapestProvider = movie.ProviderSpecificDetails.MinBy(x => x.Price);
+
+            // Get a valid poster URL from the provider-specific details
+            var validPosterUrl = await GetValidPosterUrlAsync(movie.ProviderSpecificDetails);
+
             return new MovieDetailResponseDto
             {
-                Id = movie.Id,
                 Title = movie.Title,
                 Year = movie.Year,
                 Type = movie.Type,
@@ -40,31 +43,27 @@ namespace MoviePriceComparison.Application.UseCases
                 Language = movie.Language,
                 Country = movie.Country,
                 Awards = movie.Awards,
-                Poster = movie.Poster,
+                Poster = validPosterUrl,
                 Metascore = movie.Metascore,
                 Rating = movie.Rating,
                 Votes = movie.Votes,
-                CreatedAt = movie.CreatedAt,
                 UpdatedAt = movie.UpdatedAt,
-                Prices = movie.MoviePrices.Select(price => new MoviePriceDto
+                Prices = movie.ProviderSpecificDetails.Select(price => new MoviePriceDto
                 {
+                    ProviderId = price.ProviderId,
                     Provider = price.Provider,
+                    MovieId = price.MovieId,
                     Price = price.Price,
-                    Currency = price.Currency,
-                    IsAvailable = price.IsAvailable,
-                    LastUpdated = price.LastUpdated,
-                    ErrorMessage = price.ErrorMessage
+                    LastUpdated = price.UpdatedAt,
                 }).ToList(),
-                CheapestPrice = movie.GetCheapestPrice() != null ? new MoviePriceDto
+                CheapestPrice = cheapestProvider != null ? new MoviePriceDto
                 {
-                    Provider = movie.GetCheapestPrice()!.Provider,
-                    Price = movie.GetCheapestPrice()!.Price,
-                    Currency = movie.GetCheapestPrice()!.Currency,
-                    IsAvailable = movie.GetCheapestPrice()!.IsAvailable,
-                    LastUpdated = movie.GetCheapestPrice()!.LastUpdated,
-                    ErrorMessage = movie.GetCheapestPrice()!.ErrorMessage
+                    Provider = cheapestProvider.Provider,
+                    ProviderId = cheapestProvider.ProviderId,
+                    MovieId = cheapestProvider.MovieId,
+                    Price = cheapestProvider.Price,
+                    LastUpdated = cheapestProvider.UpdatedAt
                 } : null,
-                HasValidPrices = movie.HasValidPrices()
             };
         }
     }
