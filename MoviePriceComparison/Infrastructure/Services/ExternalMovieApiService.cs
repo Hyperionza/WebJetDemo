@@ -62,7 +62,7 @@ namespace MoviePriceComparison.Infrastructure.Services
                 });
 
                 return pasrsedResponse?.Movies ?? Enumerable.Empty<ExternalMovieSummaryDto>();
-			}
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting movies from provider {ProviderId}", providerId);
@@ -120,13 +120,13 @@ namespace MoviePriceComparison.Infrastructure.Services
         }
     }
 
-	public class ExternalMoviesResponseDto
-	{
-		public ExternalMovieSummaryDto[] Movies { get; set; } = Array.Empty<ExternalMovieSummaryDto>();
-	}
+    public class ExternalMoviesResponseDto
+    {
+        public ExternalMovieSummaryDto[] Movies { get; set; } = Array.Empty<ExternalMovieSummaryDto>();
+    }
 
-	// DTOs for external API responses
-	public class ExternalMovieSummaryDto
+    // DTOs for external API responses
+    public class ExternalMovieSummaryDto
     {
         public string ID { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
