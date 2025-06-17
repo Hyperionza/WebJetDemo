@@ -46,7 +46,7 @@ namespace MoviePriceComparison.Tests.Infrastructure.Services
         }
 
         [Test]
-        public async Task GetMoviesFromProviderAsync_WithValidProvider_ShouldReturnEmpty()
+        public async Task GetMoviesFromProviderAsync_WithValidProvider_ShouldNotReturnEmpty()
         {
             // Arrange
             var provider = new ApiProvider
@@ -86,7 +86,7 @@ namespace MoviePriceComparison.Tests.Infrastructure.Services
             var result = await _service.GetMoviesFromProviderAsync("cinemaworld");
 
             // Assert
-            result.Should().BeEmpty(); // Implementation returns empty even with valid response
+            result.Should().NotBeEmpty();
         }
 
         [Test]
