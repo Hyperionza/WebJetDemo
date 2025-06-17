@@ -32,7 +32,7 @@ describe('MovieApiService', () => {
 
             const result = await movieApi.getMovies();
 
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies');
+            expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:5091/api/movies');
             expect(result).toEqual(mockMovies);
         });
 
@@ -72,7 +72,7 @@ describe('MovieApiService', () => {
 
             const result = await movieApi.getMovieDetail(1);
 
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/1');
+            expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:5091/api/movies/1');
             expect(result).toEqual(mockMovieDetail);
         });
 
@@ -100,7 +100,7 @@ describe('MovieApiService', () => {
 
             await movieApi.getMovieDetail(42);
 
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/42');
+            expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:5091/api/movies/42');
         });
     });
 
@@ -112,7 +112,7 @@ describe('MovieApiService', () => {
 
             await movieApi.refreshMovieData();
 
-            expect(mockFetch).toHaveBeenCalledWith('http://localhost:5091/api/movies/refresh', {
+            expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:5091/api/movies/refresh', {
                 method: 'POST',
             });
         });
@@ -161,7 +161,7 @@ describe('MovieApiService', () => {
 
     describe('API endpoints', () => {
         test('should use correct base URL for all endpoints', async () => {
-            const baseUrl = 'http://localhost:5091/api';
+            const baseUrl = 'http://127.0.0.1:5091/api';
 
             // Mock all responses
             mockFetch.mockResolvedValue({
@@ -177,7 +177,7 @@ describe('MovieApiService', () => {
             const calls = mockFetch.mock.calls;
             expect(calls[0][0]).toBe(`${baseUrl}/movies`);
             expect(calls[1][0]).toBe(`${baseUrl}/movies/1`);
-            expect(calls[4][0]).toBe(`${baseUrl}/movies/refresh`);
+            expect(calls[2][0]).toBe(`${baseUrl}/movies/refresh`);
         });
 
         test('should use correct HTTP methods', async () => {
@@ -197,7 +197,7 @@ describe('MovieApiService', () => {
             expect(calls[1][1]).toBeUndefined(); // getMovieDetail
 
             // POST request
-            expect(calls[4][1]).toEqual({ method: 'POST' }); // refreshMovieData
+            expect(calls[2][1]).toEqual({ method: 'POST' }); // refreshMovieData
         });
     });
 
